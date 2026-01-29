@@ -1,0 +1,68 @@
+<div id="productsPage" class="products-page">
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <h1>📱 Impartial Enterprises - Manage Products</h1>
+      </div>
+      
+      <div class="header-right">
+        <div class="user-info">
+          <span class="user-label">User:</span>
+          <span class="user-name" id="userName"></span>
+          <span class="user-role" id="userRole"></span>
+        </div>
+        <button id="backBtn" class="btn btn-secondary">Back to POS</button>
+        <button id="logoutBtn" class="btn btn-danger">Logout</button>
+      </div>
+    </header>
+
+    <!-- Products Interface -->
+    <div class="products-interface">
+      <h2>Manage Products</h2>
+      
+      <!-- Add Product Form -->
+      <div class="add-product-form">
+        <h3>Add New Product</h3>
+        <form id="addProductForm">
+          <div class="form-group">
+            <label for="productName">Product Name:</label>
+            <input type="text" id="productName" required>
+          </div>
+          <div class="form-group">
+            <label for="productPrice">Price:</label>
+            <input type="number" id="productPrice" step="0.01" required>
+          </div>
+          <div class="form-group">
+            <label for="productCategory">Category:</label>
+            <input type="text" id="productCategory">
+          </div>
+          <div class="form-group">
+            <label for="productStock">Stock:</label>
+            <input type="number" id="productStock" value="10">
+          </div>
+          <button type="submit" class="btn btn-primary">Add Product</button>
+        </form>
+        <div id="addProductStatus" class="status-message"></div>
+      </div>
+
+      <!-- Products List -->
+      <div class="products-list">
+        <h3>Current Products</h3>
+        <div id="productsLoadingStatus" class="loading">Loading products...</div>
+        <table id="productsTable" class="products-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Category</th>
+              <th>Price</th>
+              <th>Stock</th>
+            </tr>
+          </thead>
+          <tbody id="productsTableBody">
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
