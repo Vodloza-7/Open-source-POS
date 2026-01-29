@@ -1,15 +1,36 @@
 const POSModule = {
+  STORAGE_KEY: 'pos.products',
   TAX_RATE: 0.10,
   cart: [],
   products: [],
 
   async init() {
+    this.initializeSampleProducts(); // Add sample products if none exist
     this.setupEventListeners();
     this.updateUserDisplay();
-    this.applyRolePermissions(); // Add this call
+    this.applyRolePermissions();
     this.updateDateTime();
     await this.loadProducts();
     setInterval(() => this.updateDateTime(), 1000);
+  },
+
+  initializeSampleProducts() {
+    const products = this.getStoredProducts();
+    if (products.length === 0) {
+      const samples = [
+        { id: 1, name: 'Rice 5kg', price: 12.99, unit: 'bag', category: 'Groceries', stock: 50 },
+        { id: 2, name: 'Cooking Oil 2L', price: 8.50, unit: 'bottle', category: 'Groceries', stock: 30 },
+        { id: 3, name: 'Sugar 1kg', price: 3.25, unit: 'pack', category: 'Groceries', stock: 75 },
+        { id: 4, name: 'Milk 1L', price: 4.99, unit: 'carton', category: 'Dairy', stock: 40 },
+        { id: 5, name: 'Bread', price: 2.50, unit: 'loaf', category: 'Bakery', stock: 60 },
+        { id: 6, name: 'Eggs (Dozen)', price: 5.75, unit: 'dozen', category: 'Dairy', stock: 45 },
+        { id: 7, name: 'Chicken 1kg', price: 9.99, unit: 'kg', category: 'Meat', stock: 25 },
+        { id: 8, name: 'Tomatoes 1kg', price: 3.50, unit: 'kg', category: 'Vegetables', stock: 55 },
+        { id: 9, name: 'Onions 1kg', price: 2.99, unit: 'kg', category: 'Vegetables', stock: 65 },
+        { id: 10, name: 'Soft Drink 2L', price: 3.99, unit: 'bottle', category: 'Beverages', stock: 80 }
+      ];
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(samples));
+    }
   },
 
   setupEventListeners() {
@@ -49,6 +70,21 @@ const POSModule = {
     document.getElementById('amountTendered')?.addEventListener('input', (e) => {
       this.calculateChange(e.target.value);
     });
+
+    document.getElementById('manageProductsBtn')?.addEventListener('click', () => {
+      Router.navigate('products');
+    });
+
+    document.getElementById('manageProductsInlineBtn')?.addEventListener('click', () => {
+      Router.navigate('products');
+    });
+
+    // Payment method selection
+    document.querySelectorAll('input[name="paymentMethod"]').forEach(radio => {
+      radio.addEventListener('change', (e) => {
+        this.switchPaymentMethod(e.target.value);
+      });
+    });
   },
 
   updateUserDisplay() {
@@ -70,15 +106,29 @@ const POSModule = {
     const now = new Date();
     const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
     const dateStr = now.toLocaleDateString('en-US', dateOptions);
-    document.getElementById('currentDate').textContent = dateStr;
+    const dateElement = document.getElementById('currentDate');
+    if (dateElement) {
+      dateElement.textContent = dateStr;
+    }
 
     const timeStr = now.toLocaleTimeString('en-US', { hour12: true });
-    document.getElementById('currentTime').textContent = timeStr;
+    const timeElement = document.getElementById('currentTime');
+    if (timeElement) {
+      timeElement.textContent = timeStr;
+    }
+  },
+
+  getStoredProducts() {
+    try {
+      return JSON.parse(localStorage.getItem(this.STORAGE_KEY)) || [];
+    } catch {
+      return [];
+    }
   },
 
   async loadProducts() {
     try {
-      this.products = await API.getProducts();
+      this.products = this.getStoredProducts();
       this.displayProducts(this.products); // Pass all products initially
     } catch (error) {
       console.error('Error loading products:', error);
@@ -180,6 +230,30 @@ const POSModule = {
     }
   },
 
+  switchPaymentMethod(method) {
+    // Hide all payment sections
+    document.getElementById('cashPaymentSection').style.display = 'none';
+    document.getElementById('cardPaymentSection').style.display = 'none';
+    document.getElementById('mobilePaymentSection').style.display = 'none';
+    document.getElementById('walletPaymentSection').style.display = 'none';
+
+    // Show selected payment section
+    switch(method) {
+      case 'cash':
+        document.getElementById('cashPaymentSection').style.display = 'block';
+        break;
+      case 'card':
+        document.getElementById('cardPaymentSection').style.display = 'block';
+        break;
+      case 'mobile':
+        document.getElementById('mobilePaymentSection').style.display = 'block';
+        break;
+      case 'wallet':
+        document.getElementById('walletPaymentSection').style.display = 'block';
+        break;
+    }
+  },
+
   openPaymentModal() {
     if (this.cart.length === 0) {
       alert('Cart is empty!');
@@ -195,6 +269,10 @@ const POSModule = {
         <span>$${(item.price * item.quantity).toFixed(2)}</span>
       </div>
     `).join('');
+
+    // Reset to cash payment method
+    document.querySelector('input[name="paymentMethod"][value="cash"]').checked = true;
+    this.switchPaymentMethod('cash');
 
     document.getElementById('paymentModal').style.display = 'flex';
     document.getElementById('amountTendered').focus();
@@ -215,12 +293,22 @@ const POSModule = {
   },
 
   async completeSale() {
-    const amountTendered = parseFloat(document.getElementById('amountTendered').value) || 0;
+    const selectedMethod = document.querySelector('input[name="paymentMethod"]:checked').value;
     const total = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) * (1 + this.TAX_RATE);
 
-    if (amountTendered < total) {
-      alert('Amount tendered is less than the total due.');
-      return;
+    // Validate based on payment method
+    if (selectedMethod === 'cash') {
+      const amountTendered = parseFloat(document.getElementById('amountTendered').value) || 0;
+      if (amountTendered < total) {
+        alert('Amount tendered is less than the total due.');
+        return;
+      }
+    } else if (selectedMethod === 'mobile') {
+      const mobileNumber = document.getElementById('mobileNumber').value;
+      if (!mobileNumber) {
+        alert('Please enter mobile number.');
+        return;
+      }
     }
 
     const subtotal = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -233,11 +321,19 @@ const POSModule = {
         subtotal: subtotal,
         tax: tax,
         total: total,
-        userId: user.id
+        userId: user.id,
+        paymentMethod: selectedMethod
       });
 
-      const change = amountTendered - total;
-      alert(`Sale Completed!\nTransaction ID: ${result.id}\nTotal: $${total.toFixed(2)}\nChange Due: $${change.toFixed(2)}`);
+      let message = `Sale Completed!\nTransaction ID: ${result.id}\nTotal: $${total.toFixed(2)}\nPayment Method: ${selectedMethod.toUpperCase()}`;
+      
+      if (selectedMethod === 'cash') {
+        const amountTendered = parseFloat(document.getElementById('amountTendered').value);
+        const change = amountTendered - total;
+        message += `\nChange Due: $${change.toFixed(2)}`;
+      }
+
+      alert(message);
       
       this.cart = [];
       this.updateCart();

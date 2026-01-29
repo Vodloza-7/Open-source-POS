@@ -143,6 +143,20 @@ app.patch('/api/products/:id/stock', async (req, res) => {
   res.json(products[productIndex]);
 });
 
+// Delete a product
+app.delete('/api/products/:id', async (req, res) => {
+  const productId = parseInt(req.params.id);
+  const products = await readDb(PRODUCTS_FILE);
+  const nextProducts = products.filter(p => p.id !== productId);
+
+  if (nextProducts.length === products.length) {
+    return res.status(404).json({ error: 'Product not found.' });
+  }
+
+  await writeDb(PRODUCTS_FILE, nextProducts);
+  res.json({ success: true });
+});
+
 // Complete a sale
 app.post('/api/sales', async (req, res) => {
   const { items, subtotal, tax, total, userId } = req.body;
@@ -181,6 +195,37 @@ app.get('/api/sales', async (req, res) => {
   });
 
   res.json(salesWithCashier.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 50));
+});
+
+// Update product fields
+app.patch('/api/products/:id', async (req, res) => {
+  const productId = parseInt(req.params.id);
+  const { name, price, category, unit, stock } = req.body;
+
+  const products = await readDb(PRODUCTS_FILE);
+  const productIndex = products.findIndex(p => p.id === productId);
+
+  if (productIndex === -1) {
+    return res.status(404).json({ error: 'Product not found.' });
+  }
+
+  const current = products[productIndex];
+  const next = {
+    ...current,
+    name: name ?? current.name,
+    price: price ?? current.price,
+    category: category ?? current.category,
+    unit: unit ?? current.unit,
+    stock: stock ?? current.stock
+  };
+
+  if (!next.name || next.price === undefined) {
+    return res.status(400).json({ error: 'Name and price are required.' });
+  }
+
+  products[productIndex] = next;
+  await writeDb(PRODUCTS_FILE, products);
+  res.json(next);
 });
 
 app.listen(PORT, () => {

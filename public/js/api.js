@@ -79,6 +79,19 @@ const API = {
     });
   },
 
+  deleteProduct(productId) {
+    return this.request(`/products/${productId}`, {
+      method: 'DELETE'
+    });
+  },
+
+  updateProduct(productId, data) {
+    return this.request(`/products/${productId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data)
+    });
+  },
+
   // Sales
   completeSale(saleData) {
     return this.request('/sales', {

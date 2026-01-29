@@ -1,9 +1,15 @@
 <div id="productsPage" class="products-page">
   <div class="container">
-    <!-- Header -->
     <header class="header">
       <div class="header-left">
         <h1>📦 Manage Products</h1>
+      </div>
+      
+      <div class="header-center">
+        <div class="datetime">
+          <div class="date" id="currentDate"></div>
+          <div class="time" id="currentTime"></div>
+        </div>
       </div>
       
       <div class="header-right">
@@ -12,14 +18,12 @@
           <span class="user-name" id="userName"></span>
           <span class="user-role" id="userRole"></span>
         </div>
-        <button id="backBtn" class="btn btn-secondary">Back to Dashboard</button>
+        <button id="backBtn" class="btn btn-secondary">Back to POS</button>
         <button id="logoutBtn" class="btn btn-danger">Logout</button>
       </div>
     </header>
 
-    <!-- Products Interface -->
     <div class="products-interface">
-      <!-- Add Product Form -->
       <div class="add-product-form">
         <h3>Add New Product</h3>
         <form id="addProductForm">
@@ -52,7 +56,6 @@
         <div id="addProductStatus" class="status-message"></div>
       </div>
 
-      <!-- Products List -->
       <div class="products-list">
         <h3>Current Products</h3>
         <div id="productsLoadingStatus" class="loading">Loading products...</div>

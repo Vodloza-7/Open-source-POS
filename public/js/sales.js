@@ -10,6 +10,10 @@ const SalesModule = {
       Router.navigate('pos');
     });
 
+    document.getElementById('manageProductsBtn')?.addEventListener('click', () => {
+      Router.navigate('products');
+    });
+
     document.getElementById('logoutBtn')?.addEventListener('click', () => {
       Auth.logout();
       Router.navigate('login');
@@ -34,7 +38,7 @@ const SalesModule = {
       if (loadingStatus) loadingStatus.style.display = 'none';
 
       if (sales.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">No sales records found.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No sales records found.</td></tr>';
         return;
       }
 
@@ -45,6 +49,10 @@ const SalesModule = {
           timeStyle: 'short'
         });
 
+        const itemsList = sale.items.map(item => 
+          `${item.name} (x${item.quantity}) - $${(item.price * item.quantity).toFixed(2)}`
+        ).join('<br>');
+
         return `
           <tr>
             <td>#${sale.id}</td>
@@ -52,6 +60,17 @@ const SalesModule = {
             <td>${sale.cashierName || 'N/A'}</td>
             <td>${sale.items_count}</td>
             <td>$${sale.total.toFixed(2)}</td>
+            <td>
+              <button class="btn btn-secondary btn-sm" onclick="SalesModule.showItems(${sale.id})">View Items</button>
+            </td>
+          </tr>
+          <tr id="items-${sale.id}" class="sale-items-row" style="display: none;">
+            <td colspan="6">
+              <div class="sale-items-detail">
+                <h4>Items Sold:</h4>
+                <div class="items-list">${itemsList}</div>
+              </div>
+            </td>
           </tr>
         `;
       }).join('');
@@ -62,6 +81,13 @@ const SalesModule = {
         loadingStatus.textContent = `Error: ${error.message}`;
         loadingStatus.className = 'loading error';
       }
+    }
+  },
+
+  showItems(saleId) {
+    const row = document.getElementById(`items-${saleId}`);
+    if (row) {
+      row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
     }
   }
 };

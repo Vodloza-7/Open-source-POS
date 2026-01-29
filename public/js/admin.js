@@ -13,10 +13,6 @@ const AdminModule = {
       Router.navigate('login');
     });
 
-    document.getElementById('manageProductsBtn')?.addEventListener('click', () => {
-      Router.navigate('products');
-    });
-
     document.getElementById('addUserForm')?.addEventListener('submit', (e) => {
       this.handleAddUser(e);
     });
