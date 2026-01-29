@@ -168,7 +168,7 @@ body {
 }
 
 .company-logo {
-  height: 50px;
+  height: 90px;
   width: auto;
   object-fit: contain;
 }
@@ -330,6 +330,14 @@ body {
   font-size: 14px;
 }
 
+.barcode-bar input {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  width: 220px;
+  font-size: 14px;
+}
+
 .products-section,
 .cart-section,
 .products-interface,
@@ -401,6 +409,16 @@ body {
 
 .product-card button:hover {
   background: #2980b9;
+}
+
+.product-card.out-of-stock {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.product-card.out-of-stock button {
+  background: #ccc;
+  cursor: not-allowed;
 }
 
 /* Cart Section */

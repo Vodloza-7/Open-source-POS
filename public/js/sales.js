@@ -1,4 +1,6 @@
 const SalesModule = {
+  sales: [],
+
   async init() {
     this.setupEventListeners();
     this.updateUserDisplay();
@@ -18,6 +20,10 @@ const SalesModule = {
       Auth.logout();
       Router.navigate('login');
     });
+
+    document.getElementById('downloadReportBtn')?.addEventListener('click', () => {
+      this.downloadReport();
+    });
   },
 
   updateUserDisplay() {
@@ -34,7 +40,8 @@ const SalesModule = {
     
     try {
       const sales = await API.getSales();
-      
+      this.sales = sales;
+
       if (loadingStatus) loadingStatus.style.display = 'none';
 
       if (sales.length === 0) {
@@ -75,6 +82,11 @@ const SalesModule = {
         `;
       }).join('');
 
+      const totalSales = sales.reduce((sum, s) => sum + s.total, 0);
+      const totalItems = sales.reduce((sum, s) => sum + s.items_count, 0);
+      document.getElementById('reportTotalSales').textContent = `$${totalSales.toFixed(2)}`;
+      document.getElementById('reportTotalItems').textContent = totalItems;
+
     } catch (error) {
       console.error('Error loading sales history:', error);
       if (loadingStatus) {
@@ -89,5 +101,31 @@ const SalesModule = {
     if (row) {
       row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
     }
+  },
+
+  downloadReport() {
+    if (!this.sales.length) {
+      alert('No sales to report.');
+      return;
+    }
+
+    const header = ['Sale ID', 'Date', 'Cashier', 'Items', 'Total'];
+    const rows = this.sales.map(s => [
+      s.id,
+      new Date(s.created_at).toLocaleString(),
+      s.cashierName || 'N/A',
+      s.items_count,
+      s.total.toFixed(2)
+    ]);
+
+    const csv = [header, ...rows].map(r => r.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `sales-report-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 };

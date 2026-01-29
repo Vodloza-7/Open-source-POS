@@ -21,6 +21,11 @@
     <!-- Sales List -->
     <div class="sales-list">
       <h3>Recent Transactions</h3>
+      <div class="report-summary">
+        <div>Total Sales: <strong id="reportTotalSales">$0.00</strong></div>
+        <div>Items Sold: <strong id="reportTotalItems">0</strong></div>
+        <button id="downloadReportBtn" class="btn btn-secondary btn-sm">Download Report (CSV)</button>
+      </div>
       <div id="salesLoadingStatus" class="loading">Loading sales history...</div>
       <table id="salesTable" class="sales-table">
         <thead>

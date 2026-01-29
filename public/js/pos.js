@@ -85,6 +85,14 @@ const POSModule = {
         this.switchPaymentMethod(e.target.value);
       });
     });
+
+    document.getElementById('barcodeInput')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        this.handleBarcodeScan(e.target.value);
+        e.target.value = '';
+      }
+    });
   },
 
   updateUserDisplay() {
@@ -156,21 +164,35 @@ const POSModule = {
       return;
     }
 
-    productsList.innerHTML = productsToDisplay.map(product => `
-      <div class="product-card" onclick="POSModule.addToCart(${product.id})">
-        <h4>${product.name}</h4>
-        <div class="price">$${product.price.toFixed(2)}</div>
-        <div class="stock">Stock: ${product.stock}</div>
-        <button type="button">Add to Cart</button>
-      </div>
-    `).join('');
+    productsList.innerHTML = productsToDisplay.map(product => {
+      const outOfStock = Number(product.stock) <= 0;
+      return `
+        <div class="product-card ${outOfStock ? 'out-of-stock' : ''}" ${outOfStock ? '' : `onclick="POSModule.addToCart(${product.id})"`}>
+          <h4>${product.name}</h4>
+          <div class="price">$${product.price.toFixed(2)}</div>
+          <div class="stock">${outOfStock ? 'Out of Stock' : `Stock: ${product.stock}`}</div>
+          <button type="button" ${outOfStock ? 'disabled' : ''}>${outOfStock ? 'Unavailable' : 'Add to Cart'}</button>
+        </div>
+      `;
+    }).join('');
   },
 
   addToCart(productId) {
     const product = this.products.find(p => p.id === productId);
     if (!product) return;
 
+    if (Number(product.stock) <= 0) {
+      alert('Out of stock.');
+      return;
+    }
+
     const existingItem = this.cart.find(item => item.id === productId);
+    const nextQty = (existingItem?.quantity || 0) + 1;
+
+    if (nextQty > Number(product.stock)) {
+      alert('Not enough stock available.');
+      return;
+    }
 
     if (existingItem) {
       existingItem.quantity++;
@@ -292,9 +314,110 @@ const POSModule = {
     document.getElementById('changeDue').textContent = change >= 0 ? `$${change.toFixed(2)}` : '$0.00';
   },
 
+  setStoredProducts(products) {
+    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(products));
+  },
+
+  handleBarcodeScan(rawValue) {
+    const code = String(rawValue || '').trim();
+    if (!code) return;
+
+    const product = this.findProductByBarcode(code);
+    if (!product) {
+      alert('Product not found for this barcode.');
+      return;
+    }
+
+    this.addToCart(product.id);
+  },
+
+  findProductByBarcode(code) {
+    const byBarcode = this.products.find(p => String(p.barcode || '').trim() === code);
+    if (byBarcode) return byBarcode;
+
+    const byId = this.products.find(p => String(p.id) === code);
+    if (byId) return byId;
+
+    const byName = this.products.find(p => p.name?.toLowerCase() === code.toLowerCase());
+    return byName || null;
+  },
+
+  canFulfillCart() {
+    const stockMap = new Map(this.products.map(p => [p.id, Number(p.stock) || 0]));
+    for (const item of this.cart) {
+      const available = stockMap.get(item.id) ?? 0;
+      if (item.quantity > available) return false;
+    }
+    return true;
+  },
+
+  applyStockAfterSale() {
+    const products = this.getStoredProducts();
+    const stockById = new Map(products.map(p => [p.id, p]));
+
+    this.cart.forEach(item => {
+      const product = stockById.get(item.id);
+      if (!product) return;
+      const current = Number(product.stock) || 0;
+      product.stock = Math.max(0, current - item.quantity);
+    });
+
+    this.setStoredProducts(products);
+    this.products = products;
+    this.displayProducts(this.products);
+  },
+
+  buildReceiptHtml(saleId, paymentMethod, totals) {
+    const lines = this.cart.map(item => `
+      <div class="receipt-line">
+        <span>${item.name} x${item.quantity}</span>
+        <span>$${(item.price * item.quantity).toFixed(2)}</span>
+      </div>
+    `).join('');
+
+    return `
+      <html>
+      <head>
+        <title>Receipt #${saleId}</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; }
+          h2 { margin-bottom: 10px; }
+          .receipt-line { display: flex; justify-content: space-between; margin: 4px 0; }
+          .total { font-weight: bold; margin-top: 10px; }
+        </style>
+      </head>
+      <body>
+        <h2>Receipt #${saleId}</h2>
+        <div>${new Date().toLocaleString()}</div>
+        <hr />
+        ${lines}
+        <hr />
+        <div class="receipt-line"><span>Subtotal</span><span>$${totals.subtotal.toFixed(2)}</span></div>
+        <div class="receipt-line"><span>Tax</span><span>$${totals.tax.toFixed(2)}</span></div>
+        <div class="receipt-line total"><span>Total</span><span>$${totals.total.toFixed(2)}</span></div>
+        <div class="receipt-line"><span>Payment</span><span>${paymentMethod.toUpperCase()}</span></div>
+      </body>
+      </html>
+    `;
+  },
+
+  printReceipt(html) {
+    const win = window.open('', '_blank', 'width=420,height=600');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    win.print();
+  },
+
   async completeSale() {
     const selectedMethod = document.querySelector('input[name="paymentMethod"]:checked').value;
     const total = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) * (1 + this.TAX_RATE);
+
+    if (!this.canFulfillCart()) {
+      alert('Insufficient stock to complete this sale.');
+      return;
+    }
 
     // Validate based on payment method
     if (selectedMethod === 'cash') {
@@ -324,6 +447,13 @@ const POSModule = {
         userId: user.id,
         paymentMethod: selectedMethod
       });
+
+      this.applyStockAfterSale();
+
+      const receiptHtml = this.buildReceiptHtml(result.id, selectedMethod, { subtotal, tax, total });
+      if (confirm('Print receipt?')) {
+        this.printReceipt(receiptHtml);
+      }
 
       let message = `Sale Completed!\nTransaction ID: ${result.id}\nTotal: $${total.toFixed(2)}\nPayment Method: ${selectedMethod.toUpperCase()}`;
       

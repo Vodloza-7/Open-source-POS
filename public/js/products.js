@@ -16,16 +16,11 @@ const ProductsModule = {
     const products = this.getStoredProducts();
     if (products.length === 0) {
       const samples = [
-        { id: 1, name: 'Rice 5kg', price: 12.99, unit: 'bag', category: 'Groceries', stock: 50 },
-        { id: 2, name: 'Cooking Oil 2L', price: 8.50, unit: 'bottle', category: 'Groceries', stock: 30 },
-        { id: 3, name: 'Sugar 1kg', price: 3.25, unit: 'pack', category: 'Groceries', stock: 75 },
-        { id: 4, name: 'Milk 1L', price: 4.99, unit: 'carton', category: 'Dairy', stock: 40 },
-        { id: 5, name: 'Bread', price: 2.50, unit: 'loaf', category: 'Bakery', stock: 60 },
-        { id: 6, name: 'Eggs (Dozen)', price: 5.75, unit: 'dozen', category: 'Dairy', stock: 45 },
-        { id: 7, name: 'Chicken 1kg', price: 9.99, unit: 'kg', category: 'Meat', stock: 25 },
-        { id: 8, name: 'Tomatoes 1kg', price: 3.50, unit: 'kg', category: 'Vegetables', stock: 55 },
-        { id: 9, name: 'Onions 1kg', price: 2.99, unit: 'kg', category: 'Vegetables', stock: 65 },
-        { id: 10, name: 'Soft Drink 2L', price: 3.99, unit: 'bottle', category: 'Beverages', stock: 80 }
+        { id: 1, name: 'Rice 5kg', price: 12.99, unit: 'bag', category: 'Groceries', stock: 50, barcode: '100000000001' },
+        { id: 2, name: 'Cooking Oil 2L', price: 8.50, unit: 'bottle', category: 'Groceries', stock: 30, barcode: '100000000002' },
+        { id: 3, name: 'Sugar 1kg', price: 3.25, unit: 'pack', category: 'Groceries', stock: 75, barcode: '100000000003' },
+        { id: 4, name: 'Milk 1L', price: 4.99, unit: 'carton', category: 'Dairy', stock: 40, barcode: '100000000004' },
+        { id: 5, name: 'Bread', price: 2.50, unit: 'loaf', category: 'Bakery', stock: 60, barcode: '100000000005' }
       ];
       this.setStoredProducts(samples);
     }
@@ -79,6 +74,7 @@ const ProductsModule = {
           <td>${product.unit || 'item'}</td>
           <td>$${Number(product.price).toFixed(2)}</td>
           <td>${product.stock}</td>
+          <td>${product.barcode || '-'}</td>
           <td class="actions">
             <input type="number" class="stock-input" placeholder="Add Qty" min="1">
             <button class="btn btn-secondary btn-sm" onclick="ProductsModule.updateStock(${product.id}, this)">Update Stock</button>
@@ -105,6 +101,7 @@ const ProductsModule = {
     const unit = document.getElementById('productUnit').value.trim() || 'item';
     const category = document.getElementById('productCategory').value.trim();
     const stock = parseInt(document.getElementById('productStock').value, 10) || 0;
+    const barcode = document.getElementById('productBarcode').value.trim();
 
     if (!name || Number.isNaN(price)) {
       alert('Name and valid price are required.');
@@ -114,7 +111,7 @@ const ProductsModule = {
     const products = this.getStoredProducts();
     const nextId = products.length ? Math.max(...products.map(p => p.id)) + 1 : 1;
 
-    products.push({ id: nextId, name, price, unit, category, stock });
+    products.push({ id: nextId, name, price, unit, category, stock, barcode });
     this.setStoredProducts(products);
 
     document.getElementById('addProductForm').reset();
@@ -165,12 +162,15 @@ const ProductsModule = {
     const price = parseFloat(priceStr);
     const stock = parseInt(stockStr, 10);
 
+    const barcode = prompt('Barcode:', product.barcode || '');
+    if (barcode === null) return;
+
     if (!name.trim() || Number.isNaN(price) || Number.isNaN(stock)) {
       alert('Invalid values.');
       return;
     }
 
-    Object.assign(product, { name: name.trim(), price, category: category.trim(), unit: unit.trim(), stock });
+    Object.assign(product, { name: name.trim(), price, category: category.trim(), unit: unit.trim(), stock, barcode: barcode.trim() });
     this.setStoredProducts(products);
     await this.loadProductsTable();
   },
