@@ -6,14 +6,23 @@ const POSModule = {
   async init() {
     this.setupEventListeners();
     this.updateUserDisplay();
+    this.applyRolePermissions(); // Add this call
     this.updateDateTime();
     await this.loadProducts();
     setInterval(() => this.updateDateTime(), 1000);
   },
 
   setupEventListeners() {
-    document.getElementById('productsBtn')?.addEventListener('click', () => {
-      Router.navigate('products');
+    document.getElementById('productSearch')?.addEventListener('input', (e) => {
+      this.filterProducts(e.target.value);
+    });
+
+    document.getElementById('adminDashboardBtn')?.addEventListener('click', () => {
+      Router.navigate('admin');
+    });
+
+    document.getElementById('salesHistoryBtn')?.addEventListener('click', () => {
+      Router.navigate('sales');
     });
 
     document.getElementById('logoutBtn')?.addEventListener('click', () => {
@@ -25,8 +34,20 @@ const POSModule = {
       this.clearCart();
     });
 
-    document.getElementById('completeBtn')?.addEventListener('click', () => {
+    document.getElementById('checkoutBtn')?.addEventListener('click', () => {
+      this.openPaymentModal();
+    });
+
+    document.getElementById('cancelPaymentBtn')?.addEventListener('click', () => {
+      this.closePaymentModal();
+    });
+
+    document.getElementById('confirmPaymentBtn')?.addEventListener('click', () => {
       this.completeSale();
+    });
+
+    document.getElementById('amountTendered')?.addEventListener('input', (e) => {
+      this.calculateChange(e.target.value);
     });
   },
 
@@ -36,6 +57,13 @@ const POSModule = {
       document.getElementById('userName').textContent = user.name;
       document.getElementById('userRole').textContent = `[${user.role}]`;
     }
+  },
+
+  applyRolePermissions() {
+    const isAdmin = Auth.isAdmin();
+    document.querySelectorAll('.admin-only').forEach(el => {
+      el.style.display = isAdmin ? 'inline-block' : 'none';
+    });
   },
 
   updateDateTime() {
@@ -51,7 +79,7 @@ const POSModule = {
   async loadProducts() {
     try {
       this.products = await API.getProducts();
-      this.displayProducts();
+      this.displayProducts(this.products); // Pass all products initially
     } catch (error) {
       console.error('Error loading products:', error);
       const productsList = document.getElementById('productsList');
@@ -61,11 +89,24 @@ const POSModule = {
     }
   },
 
-  displayProducts() {
+  filterProducts(searchTerm) {
+    const lowerCaseTerm = searchTerm.toLowerCase();
+    const filtered = this.products.filter(product => 
+      product.name.toLowerCase().includes(lowerCaseTerm)
+    );
+    this.displayProducts(filtered);
+  },
+
+  displayProducts(productsToDisplay) {
     const productsList = document.getElementById('productsList');
     if (!productsList) return;
 
-    productsList.innerHTML = this.products.map(product => `
+    if (productsToDisplay.length === 0) {
+      productsList.innerHTML = '<p class="empty-cart">No products found.</p>';
+      return;
+    }
+
+    productsList.innerHTML = productsToDisplay.map(product => `
       <div class="product-card" onclick="POSModule.addToCart(${product.id})">
         <h4>${product.name}</h4>
         <div class="price">$${product.price.toFixed(2)}</div>
@@ -133,21 +174,57 @@ const POSModule = {
   },
 
   clearCart() {
-    if (confirm('Clear the cart?')) {
+    if (confirm('Are you sure you want to clear the cart? This cannot be undone.')) {
       this.cart = [];
       this.updateCart();
     }
   },
 
-  async completeSale() {
+  openPaymentModal() {
     if (this.cart.length === 0) {
       alert('Cart is empty!');
+      return;
+    }
+    const total = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) * (1 + this.TAX_RATE);
+    document.getElementById('modalTotalDue').textContent = `$${total.toFixed(2)}`;
+    
+    const modalCartItems = document.getElementById('modalCartItems');
+    modalCartItems.innerHTML = this.cart.map(item => `
+      <div class="item">
+        <span>${item.name} (x${item.quantity})</span>
+        <span>$${(item.price * item.quantity).toFixed(2)}</span>
+      </div>
+    `).join('');
+
+    document.getElementById('paymentModal').style.display = 'flex';
+    document.getElementById('amountTendered').focus();
+  },
+
+  closePaymentModal() {
+    document.getElementById('paymentModal').style.display = 'none';
+    document.getElementById('amountTendered').value = '';
+    document.getElementById('changeDue').textContent = '$0.00';
+  },
+
+  calculateChange(amountTendered) {
+    const total = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) * (1 + this.TAX_RATE);
+    const tendered = parseFloat(amountTendered) || 0;
+    const change = tendered - total;
+    
+    document.getElementById('changeDue').textContent = change >= 0 ? `$${change.toFixed(2)}` : '$0.00';
+  },
+
+  async completeSale() {
+    const amountTendered = parseFloat(document.getElementById('amountTendered').value) || 0;
+    const total = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) * (1 + this.TAX_RATE);
+
+    if (amountTendered < total) {
+      alert('Amount tendered is less than the total due.');
       return;
     }
 
     const subtotal = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     const tax = subtotal * this.TAX_RATE;
-    const total = subtotal + tax;
     const user = Auth.getUser();
 
     try {
@@ -159,9 +236,12 @@ const POSModule = {
         userId: user.id
       });
 
-      alert(`Sale completed!\nTransaction ID: ${result.id}\nTotal: $${result.total.toFixed(2)}`);
+      const change = amountTendered - total;
+      alert(`Sale Completed!\nTransaction ID: ${result.id}\nTotal: $${total.toFixed(2)}\nChange Due: $${change.toFixed(2)}`);
+      
       this.cart = [];
       this.updateCart();
+      this.closePaymentModal();
     } catch (error) {
       console.error('Error completing sale:', error);
       alert(`Error completing sale: ${error.message}`);

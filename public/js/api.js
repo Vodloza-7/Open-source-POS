@@ -1,7 +1,9 @@
 const API = {
-  BASE_URL: 'http://localhost:3000/api',
+  BASE_URL: window.location.origin + '/api',
+  MAX_RETRIES: 3,
+  RETRY_DELAY: 1000,
 
-  async request(endpoint, options = {}) {
+  async request(endpoint, options = {}, retryCount = 0) {
     const url = `${this.BASE_URL}${endpoint}`;
     try {
       const response = await fetch(url, {
@@ -13,15 +15,30 @@ const API = {
       });
 
       if (!response.ok) {
-        const error = await response.json();
+        const error = await response.json().catch(() => ({ error: `HTTP Error: ${response.status}` }));
         throw new Error(error.error || `HTTP Error: ${response.status}`);
       }
 
       return await response.json();
     } catch (error) {
       console.error(`API Error [${endpoint}]:`, error);
+
+      // Retry logic for connection errors
+      if (retryCount < this.MAX_RETRIES && this.isConnectionError(error)) {
+        console.log(`Retrying... (${retryCount + 1}/${this.MAX_RETRIES})`);
+        await new Promise(resolve => setTimeout(resolve, this.RETRY_DELAY));
+        return this.request(endpoint, options, retryCount + 1);
+      }
+
       throw error;
     }
+  },
+
+  isConnectionError(error) {
+    return error instanceof TypeError &&
+           (error.message.includes('Failed to fetch') ||
+            error.message.includes('NetworkError') ||
+            error.message.includes('connection'));
   },
 
   // Authentication
@@ -52,6 +69,13 @@ const API = {
     return this.request('/products', {
       method: 'POST',
       body: JSON.stringify(product)
+    });
+  },
+
+  updateProductStock(productId, quantity) {
+    return this.request(`/products/${productId}/stock`, {
+      method: 'PATCH',
+      body: JSON.stringify({ quantity })
     });
   },
 

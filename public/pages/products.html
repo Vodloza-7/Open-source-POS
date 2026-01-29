@@ -3,7 +3,7 @@
     <!-- Header -->
     <header class="header">
       <div class="header-left">
-        <h1>📱 Impartial Enterprises - Manage Products</h1>
+        <h1>📦 Manage Products</h1>
       </div>
       
       <div class="header-right">
@@ -12,34 +12,40 @@
           <span class="user-name" id="userName"></span>
           <span class="user-role" id="userRole"></span>
         </div>
-        <button id="backBtn" class="btn btn-secondary">Back to POS</button>
+        <button id="backBtn" class="btn btn-secondary">Back to Dashboard</button>
         <button id="logoutBtn" class="btn btn-danger">Logout</button>
       </div>
     </header>
 
     <!-- Products Interface -->
     <div class="products-interface">
-      <h2>Manage Products</h2>
-      
       <!-- Add Product Form -->
       <div class="add-product-form">
         <h3>Add New Product</h3>
         <form id="addProductForm">
-          <div class="form-group">
-            <label for="productName">Product Name:</label>
-            <input type="text" id="productName" required>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="productName">Product Name:</label>
+              <input type="text" id="productName" required>
+            </div>
+            <div class="form-group">
+              <label for="productPrice">Price:</label>
+              <input type="number" id="productPrice" step="0.01" required>
+            </div>
+            <div class="form-group">
+              <label for="productUnit">Unit (e.g., item, case, kg):</label>
+              <input type="text" id="productUnit" placeholder="item" value="item">
+            </div>
           </div>
-          <div class="form-group">
-            <label for="productPrice">Price:</label>
-            <input type="number" id="productPrice" step="0.01" required>
-          </div>
-          <div class="form-group">
-            <label for="productCategory">Category:</label>
-            <input type="text" id="productCategory">
-          </div>
-          <div class="form-group">
-            <label for="productStock">Stock:</label>
-            <input type="number" id="productStock" value="10">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="productCategory">Category:</label>
+              <input type="text" id="productCategory">
+            </div>
+            <div class="form-group">
+              <label for="productStock">Initial Stock:</label>
+              <input type="number" id="productStock" value="0">
+            </div>
           </div>
           <button type="submit" class="btn btn-primary">Add Product</button>
         </form>
@@ -55,8 +61,10 @@
             <tr>
               <th>Name</th>
               <th>Category</th>
+              <th>Unit</th>
               <th>Price</th>
               <th>Stock</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody id="productsTableBody">

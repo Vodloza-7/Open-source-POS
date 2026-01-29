@@ -25,5 +25,9 @@ const Auth = {
 
   isLoggedIn() {
     return this.currentUser !== null;
+  },
+
+  isAdmin() {
+    return this.currentUser && this.currentUser.role === 'admin';
   }
 };

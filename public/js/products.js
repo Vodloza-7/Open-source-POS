@@ -12,7 +12,7 @@ const ProductsModule = {
     }
 
     document.getElementById('backBtn')?.addEventListener('click', () => {
-      Router.navigate('pos');
+      Router.navigate('admin');
     });
 
     document.getElementById('logoutBtn')?.addEventListener('click', () => {
@@ -41,8 +41,13 @@ const ProductsModule = {
         <tr>
           <td>${product.name}</td>
           <td>${product.category || '-'}</td>
+          <td>${product.unit || 'item'}</td>
           <td>$${product.price.toFixed(2)}</td>
           <td>${product.stock}</td>
+          <td class="actions">
+            <input type="number" class="stock-input" placeholder="Add Qty" min="1">
+            <button class="btn btn-secondary btn-sm" onclick="ProductsModule.updateStock(${product.id}, this)">Update Stock</button>
+          </td>
         </tr>
       `).join('');
     } catch (error) {
@@ -61,6 +66,7 @@ const ProductsModule = {
     const product = {
       name: document.getElementById('productName').value,
       price: parseFloat(document.getElementById('productPrice').value),
+      unit: document.getElementById('productUnit').value || 'item',
       category: document.getElementById('productCategory').value,
       stock: parseInt(document.getElementById('productStock').value)
     };
@@ -84,6 +90,26 @@ const ProductsModule = {
       console.error('Error adding product:', error);
       statusEl.textContent = `Error: ${error.message}`;
       statusEl.className = 'status-message error';
+    }
+  },
+
+  async updateStock(productId, buttonElement) {
+    const row = buttonElement.closest('tr');
+    const input = row.querySelector('.stock-input');
+    const quantity = parseInt(input.value);
+
+    if (!quantity || quantity <= 0) {
+      alert('Please enter a valid quantity to add.');
+      return;
+    }
+
+    try {
+      await API.updateProductStock(productId, quantity);
+      alert('Stock updated successfully!');
+      input.value = '';
+      await this.loadProductsTable(); // Refresh the table
+    } catch (error) {
+      alert(`Error updating stock: ${error.message}`);
     }
   }
 };

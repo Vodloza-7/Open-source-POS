@@ -1,7 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
-const sqlite3 = require('sqlite3').verbose();
+const fs = require('fs').promises;
 const path = require('path');
 
 const app = express();
@@ -12,194 +12,175 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static('public'));
 
-// Initialize SQLite database
-const db = new sqlite3.Database('./pos.db', (err) => {
-  if (err) console.error('Database error:', err);
-  else console.log('Connected to SQLite database');
-});
+// --- JSON Database Helper Functions ---
+const DB_PATH = path.join(__dirname, 'db');
+const USERS_FILE = path.join(DB_PATH, 'users.json');
+const PRODUCTS_FILE = path.join(DB_PATH, 'products.json');
+const SALES_FILE = path.join(DB_PATH, 'sales.json');
 
-// Create users table
-db.run(`
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL,
-    name TEXT NOT NULL,
-    role TEXT DEFAULT 'cashier',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )
-`);
+// Helper to read JSON file
+async function readDb(file) {
+  try {
+    await fs.access(file);
+    const data = await fs.readFile(file, 'utf-8');
+    return JSON.parse(data);
+  } catch (error) {
+    // If file doesn't exist, return default structure
+    if (file.includes('users')) return [{ id: 1, username: 'admin', password: 'admin123', name: 'Admin User', role: 'admin' }];
+    return [];
+  }
+}
 
-// Create products table
-db.run(`
-  CREATE TABLE IF NOT EXISTS products (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    price REAL NOT NULL,
-    category TEXT,
-    stock INTEGER DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )
-`);
+// Helper to write JSON file
+async function writeDb(file, data) {
+  await fs.mkdir(DB_PATH, { recursive: true });
+  await fs.writeFile(file, JSON.stringify(data, null, 2), 'utf-8');
+}
 
-// Create sales table
-db.run(`
-  CREATE TABLE IF NOT EXISTS sales (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER,
-    total REAL NOT NULL,
-    tax REAL NOT NULL,
-    items_count INTEGER,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
-  )
-`);
-
-// Create sale_items table
-db.run(`
-  CREATE TABLE IF NOT EXISTS sale_items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    sale_id INTEGER,
-    product_id INTEGER,
-    quantity INTEGER,
-    price REAL,
-    FOREIGN KEY (sale_id) REFERENCES sales(id),
-    FOREIGN KEY (product_id) REFERENCES products(id)
-  )
-`);
-
-// Initialize default user
-db.run(`
-  INSERT OR IGNORE INTO users (username, password, name, role) 
-  VALUES ('admin', 'admin123', 'Admin User', 'admin')
-`);
-
-// Authentication Endpoints
+// --- Authentication Endpoints ---
 
 // Login endpoint
-app.post('/api/login', (req, res) => {
+app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
-  
   if (!username || !password) {
     return res.status(400).json({ error: 'Username and password required' });
   }
-  
-  db.get(
-    'SELECT id, username, name, role FROM users WHERE username = ? AND password = ?',
-    [username, password],
-    (err, user) => {
-      if (err) {
-        res.status(500).json({ error: err.message });
-      } else if (user) {
-        res.json({ 
-          id: user.id, 
-          username: user.username, 
-          name: user.name, 
-          role: user.role 
-        });
-      } else {
-        res.status(401).json({ error: 'Invalid credentials' });
-      }
-    }
-  );
+
+  const users = await readDb(USERS_FILE);
+  const user = users.find(u => u.username === username && u.password === password);
+
+  if (user) {
+    res.json({ id: user.id, username: user.username, name: user.name, role: user.role });
+  } else {
+    res.status(401).json({ error: 'Invalid credentials' });
+  }
 });
 
 // Register endpoint
-app.post('/api/register', (req, res) => {
+app.post('/api/register', async (req, res) => {
   const { username, password, name } = req.body;
-  
   if (!username || !password || !name) {
     return res.status(400).json({ error: 'All fields required' });
   }
-  
-  db.run(
-    'INSERT INTO users (username, password, name, role) VALUES (?, ?, ?, ?)',
-    [username, password, name, 'cashier'],
-    function(err) {
-      if (err) {
-        res.status(500).json({ error: err.message });
-      } else {
-        res.json({ 
-          id: this.lastID, 
-          username, 
-          name, 
-          role: 'cashier' 
-        });
-      }
-    }
-  );
+
+  const users = await readDb(USERS_FILE);
+  if (users.find(u => u.username === username)) {
+    return res.status(409).json({ error: 'Username already exists' });
+  }
+
+  const newUser = {
+    id: users.length > 0 ? Math.max(...users.map(u => u.id)) + 1 : 1,
+    username,
+    password,
+    name,
+    role: 'cashier'
+  };
+
+  users.push(newUser);
+  await writeDb(USERS_FILE, users);
+  res.status(201).json({ id: newUser.id, username: newUser.username, name: newUser.name, role: newUser.role });
 });
 
 // Get user info
-app.get('/api/user/:id', (req, res) => {
-  db.get(
-    'SELECT id, username, name, role FROM users WHERE id = ?',
-    [req.params.id],
-    (err, user) => {
-      if (err) res.status(500).json({ error: err.message });
-      else if (user) res.json(user);
-      else res.status(404).json({ error: 'User not found' });
-    }
-  );
+app.get('/api/user/:id', async (req, res) => {
+    const users = await readDb(USERS_FILE);
+    const user = users.find(u => u.id === parseInt(req.params.id));
+    if (user) res.json(user);
+    else res.status(404).json({ error: 'User not found' });
 });
 
-// API Endpoints
+
+// --- API Endpoints ---
 
 // Get all products
-app.get('/api/products', (req, res) => {
-  db.all('SELECT * FROM products', (err, rows) => {
-    if (err) res.status(500).json({ error: err.message });
-    else res.json(rows);
-  });
+app.get('/api/products', async (req, res) => {
+  const products = await readDb(PRODUCTS_FILE);
+  res.json(products);
 });
 
 // Add a new product
-app.post('/api/products', (req, res) => {
-  const { name, price, category, stock } = req.body;
-  db.run(
-    'INSERT INTO products (name, price, category, stock) VALUES (?, ?, ?, ?)',
-    [name, price, category, stock],
-    function(err) {
-      if (err) res.status(500).json({ error: err.message });
-      else res.json({ id: this.lastID, name, price, category, stock });
-    }
-  );
+app.post('/api/products', async (req, res) => {
+  const { name, price, category, stock, unit } = req.body;
+  if (!name || price === undefined) {
+      return res.status(400).json({ error: 'Name and price are required' });
+  }
+
+  const products = await readDb(PRODUCTS_FILE);
+  const newProduct = {
+    id: products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1,
+    name,
+    price,
+    unit: unit || 'item',
+    category: category || '',
+    stock: stock || 0,
+    created_at: new Date().toISOString()
+  };
+
+  products.push(newProduct);
+  await writeDb(PRODUCTS_FILE, products);
+  res.status(201).json(newProduct);
+});
+
+// Update product stock
+app.patch('/api/products/:id/stock', async (req, res) => {
+  const productId = parseInt(req.params.id);
+  const { quantity } = req.body;
+
+  if (!quantity || quantity <= 0) {
+    return res.status(400).json({ error: 'Invalid quantity provided.' });
+  }
+
+  const products = await readDb(PRODUCTS_FILE);
+  const productIndex = products.findIndex(p => p.id === productId);
+
+  if (productIndex === -1) {
+    return res.status(404).json({ error: 'Product not found.' });
+  }
+
+  products[productIndex].stock += quantity;
+
+  await writeDb(PRODUCTS_FILE, products);
+  res.json(products[productIndex]);
 });
 
 // Complete a sale
-app.post('/api/sales', (req, res) => {
+app.post('/api/sales', async (req, res) => {
   const { items, subtotal, tax, total, userId } = req.body;
-  
-  db.run(
-    'INSERT INTO sales (user_id, total, tax, items_count) VALUES (?, ?, ?, ?)',
-    [userId, total, tax, items.length],
-    function(err) {
-      if (err) {
-        res.status(500).json({ error: err.message });
-        return;
-      }
-      
-      const saleId = this.lastID;
-      
-      // Insert sale items
-      items.forEach(item => {
-        db.run(
-          'INSERT INTO sale_items (sale_id, product_id, quantity, price) VALUES (?, ?, ?, ?)',
-          [saleId, item.id, item.quantity, item.price]
-        );
-      });
-      
-      res.json({ id: saleId, total, tax, items_count: items.length });
-    }
-  );
+  if (!items || !items.length) {
+      return res.status(400).json({ error: 'Sale must include items' });
+  }
+
+  const sales = await readDb(SALES_FILE);
+  const newSale = {
+    id: sales.length > 0 ? Math.max(...sales.map(s => s.id)) + 1 : 1,
+    userId,
+    total,
+    tax,
+    items_count: items.length,
+    items,
+    created_at: new Date().toISOString()
+  };
+
+  sales.push(newSale);
+  await writeDb(SALES_FILE, sales);
+  res.status(201).json(newSale);
 });
 
 // Get sales history
-app.get('/api/sales', (req, res) => {
-  db.all('SELECT * FROM sales ORDER BY created_at DESC LIMIT 50', (err, rows) => {
-    if (err) res.status(500).json({ error: err.message });
-    else res.json(rows);
+app.get('/api/sales', async (req, res) => {
+  const sales = await readDb(SALES_FILE);
+  const users = await readDb(USERS_FILE);
+
+  // Add cashier name to each sale object
+  const salesWithCashier = sales.map(sale => {
+    const cashier = users.find(u => u.id === sale.userId);
+    return {
+      ...sale,
+      cashierName: cashier ? cashier.name : 'Unknown'
+    };
   });
+
+  res.json(salesWithCashier.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 50));
 });
 
 app.listen(PORT, () => {
