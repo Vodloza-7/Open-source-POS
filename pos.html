@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>POS Interface</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <div class="row">
+            <!-- Products Section -->
+            <div class="col-md-7">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Available Products</h5>
+                        <input type="text" id="searchProduct" class="form-control mt-2" placeholder="Search products...">
+                    </div>
+                    <div class="card-body" style="max-height: 500px; overflow-y: auto;">
+                        <div class="row" id="productList">
+                            <!-- Products will be loaded here dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cart Section -->
+            <div class="col-md-5">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Cart</h5>
+                    </div>
+                    <div class="card-body">
+                        <ul id="cartItems">
+                            <!-- Cart items will be loaded here dynamically -->
+                        </ul>
+                        <button type="button" id="checkoutBtn" class="btn btn-success">Checkout</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Load products and display them
+        function loadProducts() {
+            fetch('products.json')
+                .then(response => response.json())
+                .then(products => {
+                    const productList = document.getElementById('productList');
+                    productList.innerHTML = '';
+                    products.forEach(product => {
+                        const productDiv = document.createElement('div');
+                        productDiv.innerHTML = `
+                            <div class="col-md-4">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h5>${product.name}</h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <p>${product.description}</p>
+                                        <p>${product.price}</p>
+                                        <button class="btn btn-primary" onclick="addToCart(${product.id})">Add to Cart</button>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        productList.appendChild(productDiv);
+                    });
+                });
+        }
+
+        // Add product to cart
+        function addToCart(productId) {
+            const cartItems = document.getElementById('cartItems');
+            const existingItem = Array.from(cartItems.children).find(item => item.dataset.productId === productId);
+            if (existingItem) {
+                existingItem.dataset.quantity = (parseInt(existingItem.dataset.quantity) + 1);
+            } else {
+                const newItem = document.createElement('li');
+                newItem.dataset.productId = productId;
+                newItem.innerHTML = `
+                    <div class="d-flex">
+                        <div class="me-3">${product.name}</div>
+                        <div class="ms-3">${product.price}</div>
+                        <button class="btn btn-danger" onclick="removeFromCart(${productId})">Remove</button>
+                    </div>
+                `;
+                cartItems.appendChild(newItem);
+            }
+        }
+
+        // Remove product from cart
+        function removeFromCart(productId) {
+            const cartItems = document.getElementById('cartItems');
+            const existingItem = Array.from(cartItems.children).find(item => item.dataset.productId === productId);
+            if (existingItem) {
+                existingItem.remove();
+            }
+        }
+
+        // Load products when the page loads
+        loadProducts();
+    </script>
+</body>
+</html>

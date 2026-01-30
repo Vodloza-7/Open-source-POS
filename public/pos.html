@@ -3,8 +3,7 @@
     <!-- Header -->
     <header class="header">
       <div class="header-left">
-        <img src="assets/logo.png" alt="Company Logo" class="company-logo" onerror="this.style.display='none'">
-        <h1>Impartial Enterprises POS</h1>
+        <h1>💼 Impartial Enterprises POS</h1>
       </div>
       
       <div class="header-center">
@@ -16,15 +15,8 @@
       
       <div class="header-right">
         <div class="user-info">
-          <span class="user-label">User:</span>
-          <span class="user-name" id="userName"></span>
-          <span class="user-role" id="userRole"></span>
+          <span>👤 <span id="userName">User</span></span>
         </div>
-
-        <button id="manageProductsBtn" class="btn btn-primary">Manage Products</button>
-        <button id="settingsBtn" class="btn btn-primary admin-only">Settings</button>
-        <button id="adminDashboardBtn" class="btn btn-primary admin-only">Admin Dashboard</button>
-        <button id="salesHistoryBtn" class="btn btn-secondary admin-only">Sales History</button>
         <button id="logoutBtn" class="btn btn-danger">Logout</button>
       </div>
     </header>
@@ -34,24 +26,19 @@
       <!-- Products Section -->
       <div class="products-section">
         <div class="products-header">
-          <h2>Products</h2>
-          <div class="search-bar">
-            <input type="text" id="productSearch" placeholder="Search products...">
-          </div>
-          <div class="barcode-bar">
-            <input type="text" id="barcodeInput" placeholder="Scan or enter barcode, then press Enter">
-          </div>
-          <button id="manageProductsInlineBtn" class="btn btn-secondary">Add / Edit / Delete Products</button>
+          <h2>📦 Products</h2>
+          <input type="text" id="productSearch" class="search-input" placeholder="🔍 Search products by name or SKU...">
+          <input type="text" id="barcodeInput" class="barcode-input" placeholder="📊 Scan barcode...">
         </div>
-        <div id="productsLoadingStatus" class="loading">Loading products...</div>
+        <div id="productsLoadingStatus" class="loading">⏳ Loading products...</div>
         <div id="productsList" class="products-grid">
-          <!-- Products will be listed here -->
+          <!-- Products will be displayed here -->
         </div>
       </div>
 
       <!-- Cart Section -->
       <div class="cart-section">
-        <h2>Shopping Cart</h2>
+        <h2>🛒 Shopping Cart</h2>
         <div id="cartItems" class="cart-items">
           <p class="empty-cart">Cart is empty</p>
         </div>
@@ -75,7 +62,7 @@
         <!-- Action Buttons -->
         <div class="cart-actions">
           <button id="clearCartBtn" class="btn btn-danger full-width">Clear Cart</button>
-          <button id="checkoutBtn" class="btn btn-success full-width">Proceed to Payment</button>
+          <button id="checkoutBtn" class="btn btn-success full-width">💳 Proceed to Payment</button>
         </div>
       </div>
     </div>
@@ -85,6 +72,7 @@
   <div id="paymentModal" class="modal-overlay">
     <div class="modal-content">
       <h2>💳 Payment Method</h2>
+      
       <div class="payment-summary">
         <div class="summary-row total">
           <span>Total Due:</span>
@@ -106,17 +94,12 @@
           <label class="payment-option">
             <input type="radio" name="paymentMethod" value="card">
             <span class="payment-icon">💳</span>
-            <span>Credit/Debit Card</span>
+            <span>Card</span>
           </label>
           <label class="payment-option">
             <input type="radio" name="paymentMethod" value="mobile">
             <span class="payment-icon">📱</span>
-            <span>Mobile Payment</span>
-          </label>
-          <label class="payment-option">
-            <input type="radio" name="paymentMethod" value="wallet">
-            <span class="payment-icon">👛</span>
-            <span>Digital Wallet</span>
+            <span>Mobile</span>
           </label>
         </div>
       </div>
@@ -124,7 +107,7 @@
       <div id="cashPaymentSection" class="payment-section">
         <div class="form-group">
           <label for="amountTendered">Amount Tendered:</label>
-          <input type="number" id="amountTendered" step="0.01" placeholder="e.g., 20.00">
+          <input type="number" id="amountTendered" step="0.01" min="0" placeholder="Enter amount">
         </div>
         <div class="change-due">
           <span>Change Due:</span>
@@ -133,37 +116,20 @@
       </div>
 
       <div id="cardPaymentSection" class="payment-section" style="display: none;">
-        <div class="card-info">
-          <p>💳 Please swipe, insert, or tap card</p>
-          <div class="processing-animation">Processing...</div>
-        </div>
+        <p>💳 Please insert or tap card...</p>
+        <div class="processing-animation">Processing...</div>
       </div>
 
       <div id="mobilePaymentSection" class="payment-section" style="display: none;">
-        <div class="mobile-info">
-          <p>📱 Scan QR code or enter mobile number</p>
-          <input type="tel" id="mobileNumber" placeholder="Mobile number">
-        </div>
-      </div>
-
-      <div id="walletPaymentSection" class="payment-section" style="display: none;">
-        <div class="wallet-info">
-          <p>👛 Select digital wallet:</p>
-          <select id="walletProvider">
-            <option value="paypal">PayPal</option>
-            <option value="venmo">Venmo</option>
-            <option value="cashapp">Cash App</option>
-            <option value="zelle">Zelle</option>
-          </select>
-        </div>
+        <input type="tel" id="mobileNumber" placeholder="Enter mobile number">
       </div>
 
       <div class="modal-actions">
         <button id="cancelPaymentBtn" class="btn btn-secondary">Cancel</button>
-        <button id="confirmPaymentBtn" class="btn btn-success">Confirm Sale</button>
+        <button id="confirmPaymentBtn" class="btn btn-success">✓ Confirm Sale</button>
       </div>
     </div>
   </div>
-
-  <script src="/public/js/pos.js"></script>
 </div>
+
+<script src="/js/pos.js"></script>

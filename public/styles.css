@@ -908,3 +908,95 @@ body {
     gap: 15px;
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}  border: 1px solid #bee5eb;  color: #0c5460;  background: #d1ecf1;.status-message.loading {}  border: 1px solid #f5c6cb;  color: #721c24;  background: #f8d7da;.status-message.error {}  border: 1px solid #c3e6cb;  color: #155724;  background: #d4edda;.status-message.success {}  display: block;.status-message:not(:empty) {}  text-align: center;  display: none;  font-size: 14px;  border-radius: 6px;  padding: 12px 15px;  margin-top: 15px;.status-message {/* Product Editor Modal */
+.product-editor-modal {
+  width: 90%;
+  max-width: 600px;
+  padding: 0;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 30px;
+  border-bottom: 1px solid #e0e0e0;
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: white;
+  border-radius: 12px 12px 0 0;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.modal-close-btn {
+  background: none;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
+  color: white;
+  padding: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background 0.3s ease;
+}
+
+.modal-close-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.product-editor-modal form {
+  padding: 30px;
+}
+
+.modal-footer {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding-top: 20px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.modal-footer button {
+  padding: 10px 20px;
+}

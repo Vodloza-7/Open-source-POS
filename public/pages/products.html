@@ -81,4 +81,55 @@
       </div>
     </div>
   </div>
+
+  <!-- Product Editor Modal -->
+  <div id="productEditorModal" class="modal-overlay">
+    <div class="modal-content product-editor-modal">
+      <div class="modal-header">
+        <h2 id="modalTitle">Edit Product</h2>
+        <button type="button" class="modal-close-btn" onclick="ProductsModule.closeProductEditor()">✕</button>
+      </div>
+      
+      <form id="productEditorForm">
+        <div class="form-group">
+          <label for="editorProductName">Product Name *</label>
+          <input type="text" id="editorProductName" required>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="editorProductPrice">Price *</label>
+            <input type="number" id="editorProductPrice" step="0.01" required>
+          </div>
+          <div class="form-group">
+            <label for="editorProductUnit">Unit</label>
+            <input type="text" id="editorProductUnit" placeholder="e.g., item, kg, box">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="editorProductCategory">Category</label>
+            <input type="text" id="editorProductCategory">
+          </div>
+          <div class="form-group">
+            <label for="editorProductStock">Stock</label>
+            <input type="number" id="editorProductStock" value="0">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="editorProductBarcode">Barcode</label>
+          <input type="text" id="editorProductBarcode">
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="ProductsModule.closeProductEditor()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Product</button>
+        </div>
+      </form>
+      
+      <div id="editorStatus" class="status-message"></div>
+    </div>
+  </div>
 </div>
