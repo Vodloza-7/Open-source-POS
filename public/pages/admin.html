@@ -1,9 +1,8 @@
 <div id="adminPage" class="admin-page">
   <div class="container">
-    <!-- Header -->
-    <header class="header">
+    <header class="header admin-header">
       <div class="header-left">
-        <h1>👑 Admin Dashboard</h1>
+        <h1>Administrator Dashboard</h1>
       </div>
       <div class="header-right">
         <button id="backToPosBtn" class="btn btn-secondary">Back to POS</button>
@@ -11,30 +10,179 @@
       </div>
     </header>
 
-    <div class="admin-content">
-      <!-- User Management -->
-      <div class="admin-section">
-        <h2>User Management</h2>
-        <form id="addUserForm" class="add-user-form">
-          <h3>Add New User</h3>
-          <div class="form-row">
-            <div class="form-group">
-              <label for="newUserName">Full Name:</label>
-              <input type="text" id="newUserName" required>
+    <div class="admin-dashboard">
+      <aside class="admin-sidebar">
+        <div class="admin-frame admin-brand">
+          <p class="admin-kicker">Control Center</p>
+          <h2>System Administrator</h2>
+          <p class="admin-subtitle">Manage users, inventory, suppliers, and system settings.</p>
+          <div class="admin-badges">
+            <span class="admin-badge admin-badge-blue">Secure</span>
+            <span class="admin-badge admin-badge-dark">Restricted</span>
+          </div>
+        </div>
+
+        <nav class="admin-frame admin-nav" aria-label="Admin Sections">
+          <button class="admin-nav-btn is-active" data-section="users">Manage Users</button>
+          <button class="admin-nav-btn" data-section="stock">Manage Stock</button>
+          <button class="admin-nav-btn" data-section="suppliers">Manage Suppliers</button>
+          <button class="admin-nav-btn" data-section="settings">Company details</button>
+        </nav>
+
+        <div class="admin-frame admin-actions">
+          <button class="btn btn-primary full-width" data-section-target="users">Add User</button>
+          <button class="btn btn-dark full-width" data-section-target="stock">Update Stock</button>
+          <button class="btn btn-danger full-width" data-section-target="suppliers">Review Suppliers</button>
+        </div>
+      </aside>
+
+      <section class="admin-panel-area">
+        <div class="admin-panel is-active" id="admin-panel-users" data-section="users">
+          <div class="panel-header">
+            <div>
+              <h2>Manage Users</h2>
+              <p>Invite, onboard, and maintain system access.</p>
             </div>
-            <div class="form-group">
-              <label for="newUserUsername">Username:</label>
-              <input type="text" id="newUserUsername" required>
-            </div>
-            <div class="form-group">
-              <label for="newUserPassword">Password:</label>
-              <input type="password" id="newUserPassword" required>
+            <div class="panel-actions">
+              <button class="btn btn-primary">Add User</button>
+              <button class="btn btn-dark">Export</button>
             </div>
           </div>
-          <button type="submit" class="btn btn-primary">Add User</button>
-        </form>
-        <div id="addUserStatus" class="status-message"></div>
-      </div>
+
+          <div class="panel-frame">
+            <form id="addUserForm" class="add-user-form">
+              <h3>Add New User</h3>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="newUserName">Full Name</label>
+                  <input type="text" id="newUserName" required>
+                </div>
+                <div class="form-group">
+                  <label for="newUserUsername">Username</label>
+                  <input type="text" id="newUserUsername" required>
+                </div>
+                <div class="form-group">
+                  <label for="newUserPassword">Password</label>
+                  <input type="password" id="newUserPassword" required>
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary">Add User</button>
+            </form>
+            <div id="addUserStatus" class="status-message"></div>
+          </div>
+
+          <div class="panel-frame">
+            <h3>Current Users</h3>
+            <div class="admin-placeholder">User directory will appear here once connected.</div>
+          </div>
+        </div>
+
+        <div class="admin-panel" id="admin-panel-stock" data-section="stock">
+          <div class="panel-header">
+            <div>
+              <h2>Manage Stock</h2>
+              <p>Monitor inventory levels and adjust stock counts.</p>
+            </div>
+            <div class="panel-actions">
+              <button class="btn btn-primary">Add Item</button>
+              <button class="btn btn-dark">Import CSV</button>
+            </div>
+          </div>
+
+          <div class="panel-frame admin-grid">
+            <div class="admin-tile">
+              <h3>Low Stock Alerts</h3>
+              <p>Track items nearing minimum thresholds.</p>
+              <button class="btn btn-danger">View Alerts</button>
+            </div>
+            <div class="admin-tile">
+              <h3>Stock Adjustments</h3>
+              <p>Record inventory corrections and audits.</p>
+              <button class="btn btn-primary">Start Audit</button>
+            </div>
+          </div>
+
+          <div class="panel-frame">
+            <h3>Stock Overview</h3>
+            <div class="admin-placeholder">Inventory table will appear here.</div>
+          </div>
+        </div>
+
+        <div class="admin-panel" id="admin-panel-suppliers" data-section="suppliers">
+          <div class="panel-header">
+            <div>
+              <h2>Manage Suppliers</h2>
+              <p>Maintain supplier contracts and delivery schedules.</p>
+            </div>
+            <div class="panel-actions">
+              <button class="btn btn-primary">Add Supplier</button>
+              <button class="btn btn-dark">Sync</button>
+            </div>
+          </div>
+
+          <div class="panel-frame admin-grid">
+            <div class="admin-tile">
+              <h3>Active Suppliers</h3>
+              <p>Review active relationships and contact info.</p>
+              <button class="btn btn-primary">View List</button>
+            </div>
+            <div class="admin-tile">
+              <h3>Pending Orders</h3>
+              <p>Track inbound shipments and lead times.</p>
+              <button class="btn btn-danger">Check Status</button>
+            </div>
+          </div>
+
+          <div class="panel-frame">
+            <h3>Supplier Directory</h3>
+            <div class="admin-placeholder">Supplier details will appear here.</div>
+          </div>
+        </div>
+
+        <div class="admin-panel" id="admin-panel-settings" data-section="settings">
+          <div class="panel-header">
+            <div>
+              <h2>System Settings</h2>
+              <p>Configure currency and global preferences.</p>
+            </div>
+            <div class="panel-actions">
+              <button class="btn btn-dark" id="resetSystemSettingsBtn" type="button">Reset Defaults</button>
+            </div>
+          </div>
+
+          <div class="panel-frame">
+            <form id="systemSettingsForm" class="system-settings-form">
+              <h3>Currency Settings</h3>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="currencyCode">Currency Code</label>
+                  <select id="currencyCode" required>
+                    <option value="USD">USD - US Dollar</option>
+                    <option value="EUR">EUR - Euro</option>
+                    <option value="GBP">GBP - British Pound</option>
+                    <option value="KES">KES - Kenyan Shilling</option>
+                    <option value="GHS">GHS - Ghana Cedi</option>
+                    <option value="NGN">NGN - Nigerian Naira</option>
+                    <option value="ZAR">ZAR - South African Rand</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="currencySymbol">Currency Symbol</label>
+                  <input type="text" id="currencySymbol" maxlength="4" required>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="currencyPreview">Preview</label>
+                  <input type="text" id="currencyPreview" readonly>
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary">Save Settings</button>
+            </form>
+            <div id="systemSettingsStatus" class="status-message"></div>
+          </div>
+        </div>
+      </section>
     </div>
   </div>
 </div>

@@ -1,11 +1,12 @@
 const POSModule = {
-  STORAGE_KEY: 'pos.products',
   TAX_RATE: 0.10,
   cart: [],
   products: [],
+  currentReceiptHtml: null,
+  config: null,
 
   async init() {
-    this.initializeSampleProducts(); // Add sample products if none exist
+    this.config = this.getConfig();
     this.setupEventListeners();
     this.updateUserDisplay();
     this.applyRolePermissions();
@@ -14,23 +15,39 @@ const POSModule = {
     setInterval(() => this.updateDateTime(), 1000);
   },
 
-  initializeSampleProducts() {
-    const products = this.getStoredProducts();
-    if (products.length === 0) {
-      const samples = [
-        { id: 1, name: 'Rice 5kg', price: 12.99, unit: 'bag', category: 'Groceries', stock: 50 },
-        { id: 2, name: 'Cooking Oil 2L', price: 8.50, unit: 'bottle', category: 'Groceries', stock: 30 },
-        { id: 3, name: 'Sugar 1kg', price: 3.25, unit: 'pack', category: 'Groceries', stock: 75 },
-        { id: 4, name: 'Milk 1L', price: 4.99, unit: 'carton', category: 'Dairy', stock: 40 },
-        { id: 5, name: 'Bread', price: 2.50, unit: 'loaf', category: 'Bakery', stock: 60 },
-        { id: 6, name: 'Eggs (Dozen)', price: 5.75, unit: 'dozen', category: 'Dairy', stock: 45 },
-        { id: 7, name: 'Chicken 1kg', price: 9.99, unit: 'kg', category: 'Meat', stock: 25 },
-        { id: 8, name: 'Tomatoes 1kg', price: 3.50, unit: 'kg', category: 'Vegetables', stock: 55 },
-        { id: 9, name: 'Onions 1kg', price: 2.99, unit: 'kg', category: 'Vegetables', stock: 65 },
-        { id: 10, name: 'Soft Drink 2L', price: 3.99, unit: 'bottle', category: 'Beverages', stock: 80 }
-      ];
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(samples));
+  getConfig() {
+    const defaults = {
+      barcode: {
+        inputSelector: '#barcodeInput',
+        submitOnEnter: true,
+        submitOnBlur: true,
+        allowHsCodeFallback: false,
+        allowIdFallback: false,
+        allowNameFallback: false,
+        autoFocusOnLoad: true
+      },
+      printer: {
+        autoPrintOnComplete: false,
+        receiptPrinterName: ''
+      }
+    };
+
+    if (window.POS_CONFIG && typeof window.POS_CONFIG === 'object') {
+      return {
+        ...defaults,
+        ...window.POS_CONFIG,
+        barcode: {
+          ...defaults.barcode,
+          ...(window.POS_CONFIG.barcode || {})
+        },
+        printer: {
+          ...defaults.printer,
+          ...(window.POS_CONFIG.printer || {})
+        }
+      };
     }
+
+    return defaults;
   },
 
   setupEventListeners() {
@@ -86,13 +103,32 @@ const POSModule = {
       });
     });
 
-    document.getElementById('barcodeInput')?.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        this.handleBarcodeScan(e.target.value);
-        e.target.value = '';
+    const barcodeConfig = this.config?.barcode || {};
+    const barcodeInput = document.querySelector(barcodeConfig.inputSelector || '#barcodeInput');
+    if (barcodeInput) {
+      if (barcodeConfig.submitOnEnter) {
+        barcodeInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            this.handleBarcodeScan(e.target.value);
+            e.target.value = '';
+          }
+        });
       }
-    });
+
+      if (barcodeConfig.submitOnBlur) {
+        barcodeInput.addEventListener('blur', (e) => {
+          const value = String(e.target.value || '').trim();
+          if (!value) return;
+          this.handleBarcodeScan(value);
+          e.target.value = '';
+        });
+      }
+
+      if (barcodeConfig.autoFocusOnLoad) {
+        barcodeInput.focus();
+      }
+    }
   },
 
   updateUserDisplay() {
@@ -126,17 +162,29 @@ const POSModule = {
     }
   },
 
-  getStoredProducts() {
-    try {
-      return JSON.parse(localStorage.getItem(this.STORAGE_KEY)) || [];
-    } catch {
-      return [];
-    }
+  getCurrencySettings() {
+    return {
+      currencyCode: localStorage.getItem('pos.currencyCode') || 'USD',
+      currencySymbol: localStorage.getItem('pos.currencySymbol') || '$'
+    };
+  },
+
+  formatMoney(amount) {
+    const { currencySymbol } = this.getCurrencySettings();
+    const value = Number(amount) || 0;
+    return `${currencySymbol}${value.toFixed(2)}`;
   },
 
   async loadProducts() {
     try {
-      this.products = this.getStoredProducts();
+      const products = await API.getProducts();
+      this.products = products.map(product => ({
+        ...product,
+        price: Number(product.price) || 0,
+        stock: Number(product.stock) || 0,
+        barcode: String(product.barcode || '').trim(),
+        hscode: String(product.hscode || '').trim()
+      }));
       this.displayProducts(this.products); // Pass all products initially
     } catch (error) {
       console.error('Error loading products:', error);
@@ -169,7 +217,7 @@ const POSModule = {
       return `
         <div class="product-card ${outOfStock ? 'out-of-stock' : ''}" ${outOfStock ? '' : `onclick="POSModule.addToCart(${product.id})"`}>
           <h4>${product.name}</h4>
-          <div class="price">$${product.price.toFixed(2)}</div>
+          <div class="price">${this.formatMoney(product.price)}</div>
           <div class="stock">${outOfStock ? 'Out of Stock' : `Stock: ${product.stock}`}</div>
           <button type="button" ${outOfStock ? 'disabled' : ''}>${outOfStock ? 'Unavailable' : 'Add to Cart'}</button>
         </div>
@@ -182,7 +230,7 @@ const POSModule = {
     if (!product) return;
 
     if (Number(product.stock) <= 0) {
-      alert('Out of stock.');
+      this.showOutOfStockModal(product);
       return;
     }
 
@@ -190,7 +238,7 @@ const POSModule = {
     const nextQty = (existingItem?.quantity || 0) + 1;
 
     if (nextQty > Number(product.stock)) {
-      alert('Not enough stock available.');
+      this.showOutOfStockModal(product);
       return;
     }
 
@@ -201,7 +249,9 @@ const POSModule = {
         id: productId,
         name: product.name,
         price: product.price,
-        quantity: 1
+        quantity: 1,
+        barcode: product.barcode || '',
+        hscode: product.hscode || ''
       });
     }
 
@@ -226,7 +276,7 @@ const POSModule = {
             <div class="cart-item-name">${item.name}</div>
             <div class="cart-item-qty">Qty: ${item.quantity}</div>
           </div>
-          <div class="cart-item-price">$${(item.price * item.quantity).toFixed(2)}</div>
+          <div class="cart-item-price">${this.formatMoney(item.price * item.quantity)}</div>
           <button class="cart-item-remove" onclick="POSModule.removeFromCart(${item.id})">Remove</button>
         </div>
       `).join('');
@@ -240,15 +290,41 @@ const POSModule = {
     const tax = subtotal * this.TAX_RATE;
     const total = subtotal + tax;
 
-    document.getElementById('subtotal').textContent = `$${subtotal.toFixed(2)}`;
-    document.getElementById('taxAmount').textContent = `$${tax.toFixed(2)}`;
-    document.getElementById('total').textContent = `$${total.toFixed(2)}`;
+    document.getElementById('subtotal').textContent = this.formatMoney(subtotal);
+    document.getElementById('taxAmount').textContent = this.formatMoney(tax);
+    document.getElementById('total').textContent = this.formatMoney(total);
   },
 
   clearCart() {
     if (confirm('Are you sure you want to clear the cart? This cannot be undone.')) {
       this.cart = [];
       this.updateCart();
+    }
+  },
+
+  showOutOfStockModal(product) {
+    const modal = document.getElementById('outOfStockModal');
+    if (!modal) return;
+
+    document.getElementById('outOfStockProductName').textContent = product.name;
+    document.getElementById('outOfStockProductPrice').textContent = this.formatMoney(product.price);
+    modal.style.display = 'flex';
+  },
+
+  closeOutOfStockModal() {
+    const modal = document.getElementById('outOfStockModal');
+    if (modal) {
+      modal.style.display = 'none';
+    }
+  },
+
+  sellSomethingElse() {
+    this.closeOutOfStockModal();
+    // Focus on search to help user find another product
+    const searchInput = document.getElementById('productSearch');
+    if (searchInput) {
+      searchInput.focus();
+      searchInput.placeholder = 'Try searching for another product...';
     }
   },
 
@@ -282,13 +358,13 @@ const POSModule = {
       return;
     }
     const total = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) * (1 + this.TAX_RATE);
-    document.getElementById('modalTotalDue').textContent = `$${total.toFixed(2)}`;
+    document.getElementById('modalTotalDue').textContent = this.formatMoney(total);
     
     const modalCartItems = document.getElementById('modalCartItems');
     modalCartItems.innerHTML = this.cart.map(item => `
       <div class="item">
         <span>${item.name} (x${item.quantity})</span>
-        <span>$${(item.price * item.quantity).toFixed(2)}</span>
+        <span>${this.formatMoney(item.price * item.quantity)}</span>
       </div>
     `).join('');
 
@@ -303,7 +379,7 @@ const POSModule = {
   closePaymentModal() {
     document.getElementById('paymentModal').style.display = 'none';
     document.getElementById('amountTendered').value = '';
-    document.getElementById('changeDue').textContent = '$0.00';
+    document.getElementById('changeDue').textContent = this.formatMoney(0);
   },
 
   calculateChange(amountTendered) {
@@ -311,11 +387,7 @@ const POSModule = {
     const tendered = parseFloat(amountTendered) || 0;
     const change = tendered - total;
     
-    document.getElementById('changeDue').textContent = change >= 0 ? `$${change.toFixed(2)}` : '$0.00';
-  },
-
-  setStoredProducts(products) {
-    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(products));
+    document.getElementById('changeDue').textContent = change >= 0 ? this.formatMoney(change) : this.formatMoney(0);
   },
 
   handleBarcodeScan(rawValue) {
@@ -324,7 +396,7 @@ const POSModule = {
 
     const product = this.findProductByBarcode(code);
     if (!product) {
-      alert('Product not found for this barcode.');
+      this.showBarcodeErrorModal(code);
       return;
     }
 
@@ -335,11 +407,23 @@ const POSModule = {
     const byBarcode = this.products.find(p => String(p.barcode || '').trim() === code);
     if (byBarcode) return byBarcode;
 
-    const byId = this.products.find(p => String(p.id) === code);
-    if (byId) return byId;
+    const barcodeConfig = this.config?.barcode || {};
+    if (barcodeConfig.allowHsCodeFallback) {
+      const byHsCode = this.products.find(p => String(p.hscode || '').trim() === code);
+      if (byHsCode) return byHsCode;
+    }
 
-    const byName = this.products.find(p => p.name?.toLowerCase() === code.toLowerCase());
-    return byName || null;
+    if (barcodeConfig.allowIdFallback) {
+      const byId = this.products.find(p => String(p.id) === code);
+      if (byId) return byId;
+    }
+
+    if (barcodeConfig.allowNameFallback) {
+      const byName = this.products.find(p => p.name?.toLowerCase() === code.toLowerCase());
+      if (byName) return byName;
+    }
+
+    return null;
   },
 
   canFulfillCart() {
@@ -351,51 +435,151 @@ const POSModule = {
     return true;
   },
 
-  applyStockAfterSale() {
-    const products = this.getStoredProducts();
-    const stockById = new Map(products.map(p => [p.id, p]));
-
-    this.cart.forEach(item => {
-      const product = stockById.get(item.id);
-      if (!product) return;
-      const current = Number(product.stock) || 0;
-      product.stock = Math.max(0, current - item.quantity);
-    });
-
-    this.setStoredProducts(products);
-    this.products = products;
-    this.displayProducts(this.products);
+  getDepletedItems() {
+    const stockMap = new Map(this.products.map(p => [p.id, p]));
+    const depleted = [];
+    
+    for (const item of this.cart) {
+      const product = stockMap.get(item.id);
+      if (!product) continue;
+      
+      const available = Number(product.stock) || 0;
+      const needed = Number(item.quantity) || 0;
+      
+      if (needed > available) {
+        depleted.push({
+          id: product.id,
+          name: product.name,
+          available: available,
+          needed: needed,
+          shortage: needed - available,
+          barcode: product.barcode || '',
+          hscode: product.hscode || ''
+        });
+      }
+    }
+    
+    return depleted;
   },
 
-  buildReceiptHtml(saleId, paymentMethod, totals) {
-    const lines = this.cart.map(item => `
-      <div class="receipt-line">
-        <span>${item.name} x${item.quantity}</span>
-        <span>$${(item.price * item.quantity).toFixed(2)}</span>
+  showStockAlert() {
+    const depleted = this.getDepletedItems();
+    if (depleted.length === 0) return false;
+
+    const modal = document.getElementById('stockDepletionModal');
+    const itemsList = document.getElementById('depletedItemsList');
+
+    itemsList.innerHTML = depleted.map(item => `
+      <div class="depleted-item">
+        <div class="item-detail">
+          <div class="item-detail-name">${item.name}</div>
+          <div class="item-detail-info">
+            <span>Available: <strong>${item.available}</strong></span>
+            <span>Requested: <strong>${item.needed}</strong></span>
+            ${item.barcode ? `<span>Barcode: ${item.barcode}</span>` : ''}
+            ${item.hscode ? `<span>HS Code: ${item.hscode}</span>` : ''}
+          </div>
+        </div>
+        <div class="item-shortage">Short: ${item.shortage}</div>
       </div>
     `).join('');
 
+    document.getElementById('notificationStatus').textContent = '';
+    document.getElementById('notificationStatus').className = 'notification-status';
+    modal.style.display = 'flex';
+    return true;
+  },
+
+  closeStockAlert() {
+    const modal = document.getElementById('stockDepletionModal');
+    modal.style.display = 'none';
+  },
+
+  async notifySupervisor() {
+    const statusEl = document.getElementById('notificationStatus');
+    const depleted = this.getDepletedItems();
+    
+    statusEl.textContent = 'Sending notification...';
+    statusEl.className = 'notification-status show loading';
+
+    try {
+      const user = Auth.getUser();
+      const result = await API.sendStockNotification({
+        items: depleted,
+        cashier: user.name,
+        timestamp: new Date().toISOString()
+      });
+
+      statusEl.textContent = '✓ Notification sent successfully to supervisor';
+      statusEl.className = 'notification-status show success';
+      
+      setTimeout(() => {
+        this.closeStockAlert();
+      }, 2000);
+    } catch (error) {
+      console.error('Error sending notification:', error);
+      statusEl.textContent = `✗ Failed to send notification: ${error.message}`;
+      statusEl.className = 'notification-status show error';
+    }
+  },
+
+  buildReceiptHtml(saleId, paymentMethod, totals) {
     return `
       <html>
       <head>
         <title>Receipt #${saleId}</title>
         <style>
-          body { font-family: Arial, sans-serif; padding: 20px; }
-          h2 { margin-bottom: 10px; }
-          .receipt-line { display: flex; justify-content: space-between; margin: 4px 0; }
-          .total { font-weight: bold; margin-top: 10px; }
+          @page { size: 80mm auto; margin: 4mm; }
+          body { font-family: Arial, sans-serif; padding: 0; margin: 0 auto; width: 80mm; color: #111; }
+          h2 { margin: 0 0 6px; font-size: 16px; text-align: center; }
+          .meta { text-align: center; font-size: 11px; color: #444; margin-bottom: 8px; }
+          .divider { border-top: 1px dashed #999; margin: 8px 0; }
+          table { width: 100%; border-collapse: collapse; }
+          th { text-align: left; font-size: 11px; padding-bottom: 4px; }
+          td { font-size: 11px; padding: 4px 0; vertical-align: top; }
+          .item-name { width: 52%; }
+          .item-price { width: 16%; text-align: right; }
+          .item-qty { width: 12%; text-align: right; }
+          .item-total { width: 20%; text-align: right; }
+          .item-meta { font-size: 10px; color: #555; margin-top: 2px; }
+          .receipt-line { display: flex; justify-content: space-between; margin: 3px 0; font-size: 11px; }
+          .total { font-weight: bold; margin-top: 6px; }
+          .footer { text-align: center; font-size: 10px; color: #666; margin-top: 8px; }
         </style>
       </head>
       <body>
         <h2>Receipt #${saleId}</h2>
-        <div>${new Date().toLocaleString()}</div>
-        <hr />
-        ${lines}
-        <hr />
-        <div class="receipt-line"><span>Subtotal</span><span>$${totals.subtotal.toFixed(2)}</span></div>
-        <div class="receipt-line"><span>Tax</span><span>$${totals.tax.toFixed(2)}</span></div>
-        <div class="receipt-line total"><span>Total</span><span>$${totals.total.toFixed(2)}</span></div>
+        <div class="meta">${new Date().toLocaleString()}</div>
+        <div class="divider"></div>
+        <table>
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th class="item-price">Price</th>
+              <th class="item-qty">Qty</th>
+              <th class="item-total">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${this.cart.map(item => `
+              <tr class="item-row">
+                <td class="item-name">
+                  <div>${item.name}</div>
+                  <div class="item-meta">HS: ${item.hscode || '-'}</div>
+                </td>
+                <td class="item-price">${this.formatMoney(item.price)}</td>
+                <td class="item-qty">${item.quantity}</td>
+                <td class="item-total">${this.formatMoney(item.price * item.quantity)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        <div class="divider"></div>
+        <div class="receipt-line"><span>Subtotal</span><span>${this.formatMoney(totals.subtotal)}</span></div>
+        <div class="receipt-line"><span>Tax</span><span>${this.formatMoney(totals.tax)}</span></div>
+        <div class="receipt-line total"><span>Total</span><span>${this.formatMoney(totals.total)}</span></div>
         <div class="receipt-line"><span>Payment</span><span>${paymentMethod.toUpperCase()}</span></div>
+        <div class="footer">Thank you for your purchase</div>
       </body>
       </html>
     `;
@@ -410,12 +594,90 @@ const POSModule = {
     win.print();
   },
 
+  printReceiptFromModal() {
+    if (this.currentReceiptHtml) {
+      this.printReceipt(this.currentReceiptHtml);
+    }
+  },
+
+  emailReceipt() {
+    alert('Email functionality coming soon!');
+  },
+
+  closeReceiptModal() {
+    const modal = document.getElementById('receiptModal');
+    if (modal) {
+      modal.style.display = 'none';
+    }
+    this.currentReceiptHtml = null;
+    // Clear cart after closing receipt
+    this.cart = [];
+    this.updateCart();
+  },
+
+  showBarcodeErrorModal(barcode) {
+    const modal = document.getElementById('barcodeErrorModal');
+    if (!modal) return;
+    document.getElementById('barcodeErrorMessage').textContent = `Barcode "${barcode}" not found in the system.`;
+    modal.style.display = 'flex';
+  },
+
+  closeBarcodeErrorModal() {
+    const modal = document.getElementById('barcodeErrorModal');
+    if (modal) {
+      modal.style.display = 'none';
+    }
+  },
+
+  focusBarcodeInput() {
+    this.closeBarcodeErrorModal();
+    const barcodeInput = document.getElementById('barcodeInput');
+    if (barcodeInput) {
+      barcodeInput.focus();
+      barcodeInput.value = '';
+    }
+  },
+
+  showSaleCompleteModal() {
+    const modal = document.getElementById('saleCompleteModal');
+    if (modal) {
+      modal.style.display = 'flex';
+    }
+  },
+
+  closeSaleCompleteModal() {
+    const modal = document.getElementById('saleCompleteModal');
+    if (modal) {
+      modal.style.display = 'none';
+    }
+    this.cart = [];
+    this.updateCart();
+    this.closePaymentModal();
+  },
+
+  showReceiptModal() {
+    const modal = document.getElementById('receiptModal');
+    if (modal) {
+      modal.style.display = 'flex';
+    }
+  },
+
+  confirmPrintReceipt() {
+    if (this.currentReceiptHtml) {
+      this.printReceipt(this.currentReceiptHtml);
+    }
+    this.closeReceiptModal();
+  },
+
   async completeSale() {
     const selectedMethod = document.querySelector('input[name="paymentMethod"]:checked').value;
     const total = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) * (1 + this.TAX_RATE);
 
+    await this.loadProducts();
+
     if (!this.canFulfillCart()) {
-      alert('Insufficient stock to complete this sale.');
+      this.closePaymentModal();
+      this.showStockAlert();
       return;
     }
 
@@ -448,26 +710,41 @@ const POSModule = {
         paymentMethod: selectedMethod
       });
 
-      this.applyStockAfterSale();
+      await this.loadProducts();
 
       const receiptHtml = this.buildReceiptHtml(result.id, selectedMethod, { subtotal, tax, total });
-      if (confirm('Print receipt?')) {
-        this.printReceipt(receiptHtml);
-      }
-
-      let message = `Sale Completed!\nTransaction ID: ${result.id}\nTotal: $${total.toFixed(2)}\nPayment Method: ${selectedMethod.toUpperCase()}`;
+      this.currentReceiptHtml = receiptHtml;
+      this.currentReceiptId = result.id;
+      this.currentPaymentMethod = selectedMethod;
+      this.currentSaleTotals = { subtotal, tax, total };
       
+      // Set the receipt content
+      document.getElementById('receiptContent').innerHTML = receiptHtml;
+      
+      // Build sale complete details
+      let changeMessage = '';
       if (selectedMethod === 'cash') {
         const amountTendered = parseFloat(document.getElementById('amountTendered').value);
         const change = amountTendered - total;
-        message += `\nChange Due: $${change.toFixed(2)}`;
+        changeMessage = `<p class="change-due">💰 Change Due: <strong>${this.formatMoney(change)}</strong></p>`;
       }
-
-      alert(message);
+      
+      const saleDetails = `
+        <p class="transaction-id">Transaction ID: <strong>#${result.id}</strong></p>
+        <p class="transaction-method">Payment Method: <strong>${selectedMethod.toUpperCase()}</strong></p>
+        <p class="transaction-total">Total Amount: <strong>${this.formatMoney(total)}</strong></p>
+        ${changeMessage}
+      `;
+      
+      document.getElementById('saleCompleteDetails').innerHTML = saleDetails;
+      
+      // Show receipt modal
+      this.showReceiptModal();
       
       this.cart = [];
       this.updateCart();
       this.closePaymentModal();
+      
     } catch (error) {
       console.error('Error completing sale:', error);
       alert(`Error completing sale: ${error.message}`);

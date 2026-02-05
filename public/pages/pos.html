@@ -165,5 +165,164 @@
     </div>
   </div>
 
+  <!-- Stock Depletion Modal -->
+  <div id="stockDepletionModal" class="modal-overlay">
+    <div class="modal-content stock-depletion-modal">
+      <div class="modal-header alert-header">
+        <h2>⚠️ Insufficient Stock</h2>
+        <button type="button" class="modal-close-btn" onclick="POSModule.closeStockAlert()">✕</button>
+      </div>
+      
+      <div class="modal-body">
+        <p class="alert-message">The following items do not have enough stock:</p>
+        <div id="depletedItemsList" class="depleted-items">
+          <!-- Items will be listed here -->
+        </div>
+        
+        <div class="stock-warning">
+          <p><strong>⚠️ Action Required:</strong></p>
+          <p>Please notify the supervisor or send a stock replenishment request for the items listed above.</p>
+        </div>
+      </div>
+
+      <div class="modal-actions stock-actions">
+        <button id="notifySupervisorBtn" class="btn btn-warning" onclick="POSModule.notifySupervisor()">
+          📧 Send Email Notification
+        </button>
+        <button id="closeStockAlertBtn" class="btn btn-secondary" onclick="POSModule.closeStockAlert()">
+          Back to Cart
+        </button>
+      </div>
+
+      <div id="notificationStatus" class="notification-status"></div>
+    </div>
+  </div>
+
+  <!-- Out of Stock Modal -->
+  <div id="outOfStockModal" class="modal-overlay">
+    <div class="modal-content out-of-stock-modal">
+      <div class="modal-header alert-header out-of-stock-header">
+        <h2>⚠️ Out of Stock</h2>
+        <button type="button" class="modal-close-btn" onclick="POSModule.closeOutOfStockModal()">✕</button>
+      </div>
+      
+      <div class="modal-body">
+        <div class="out-of-stock-content">
+          <div class="product-details-alert">
+            <div class="alert-icon">📦</div>
+            <div class="alert-info">
+              <p class="product-alert-name" id="outOfStockProductName">Product Name</p>
+              <p class="product-alert-price" id="outOfStockProductPrice">$0.00</p>
+            </div>
+          </div>
+          
+          <div class="stock-empty-message">
+            <p><strong>This item is currently out of stock.</strong></p>
+            <p>We're sorry! This product is not available right now. Would you like to:</p>
+            <ul class="stock-options">
+              <li>✓ Check back later for restocking</li>
+              <li>✓ Look for similar products</li>
+              <li>✓ Sell something else</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-actions stock-actions out-of-stock-actions">
+        <button id="sellSomethingElseBtn" class="btn btn-primary" onclick="POSModule.sellSomethingElse()">
+          🛒 Sell Something Else
+        </button>
+        <button id="closeOutOfStockBtn" class="btn btn-secondary" onclick="POSModule.closeOutOfStockModal()">
+          OK
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Receipt Modal -->
+  <div id="receiptModal" class="modal-overlay">
+    <div class="modal-content receipt-modal">
+      <div class="modal-header receipt-header">
+        <h2>🧾 Receipt</h2>
+        <button type="button" class="modal-close-btn" onclick="POSModule.closeReceiptModal()">✕</button>
+      </div>
+      
+      <div class="modal-body receipt-body">
+        <p class="receipt-prompt">Would you like to print this receipt?</p>
+        <div id="receiptContent" class="receipt-content">
+          <!-- Receipt HTML will be inserted here -->
+        </div>
+      </div>
+
+      <div class="modal-actions receipt-actions">
+        <button id="printReceiptBtn" class="btn btn-primary" onclick="POSModule.printReceiptFromModal()">
+          🖨️ Print Receipt
+        </button>
+        <button id="emailReceiptBtn" class="btn btn-secondary" onclick="POSModule.emailReceipt()">
+          📧 Email Receipt
+        </button>
+        <button id="closeReceiptBtn" class="btn btn-tertiary" onclick="POSModule.closeReceiptModal()">
+          Done
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Barcode Error Notification -->
+  <div id="barcodeErrorModal" class="modal-overlay">
+    <div class="modal-content barcode-error-modal">
+      <div class="modal-header barcode-error-header">
+        <h2>❌ Product Not Found</h2>
+        <button type="button" class="modal-close-btn" onclick="POSModule.closeBarcodeErrorModal()">✕</button>
+      </div>
+      
+      <div class="modal-body">
+        <div class="barcode-error-content">
+          <p id="barcodeErrorMessage">The barcode scanned was not found in the system.</p>
+          <p class="barcode-hint">Would you like to:</p>
+          <ul class="barcode-options">
+            <li>✓ Try scanning again</li>
+            <li>✓ Search for the product manually</li>
+            <li>✓ Add a new product</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="modal-actions barcode-actions">
+        <button id="searchProductBtn" class="btn btn-primary" onclick="POSModule.focusBarcodeInput()">
+          🔍 Try Again
+        </button>
+        <button id="closeBarcodeErrorBtn" class="btn btn-secondary" onclick="POSModule.closeBarcodeErrorModal()">
+          OK
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sale Completion Modal -->
+  <div id="saleCompleteModal" class="modal-overlay">
+    <div class="modal-content sale-complete-modal">
+      <div class="modal-header sale-complete-header">
+        <h2>✅ Sale Completed</h2>
+        <button type="button" class="modal-close-btn" onclick="POSModule.closeSaleCompleteModal()">✕</button>
+      </div>
+      
+      <div class="modal-body">
+        <div class="sale-complete-content">
+          <div class="sale-success-icon">✓</div>
+          <div id="saleCompleteDetails" class="sale-details">
+            <!-- Sale details will be inserted here -->
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-actions sale-complete-actions">
+        <button id="newSaleBtn" class="btn btn-primary" onclick="POSModule.closeSaleCompleteModal()">
+          🛒 New Sale
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script src="/public/js/pos.js"></script>
 </div>

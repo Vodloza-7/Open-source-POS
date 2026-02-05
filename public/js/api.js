@@ -102,5 +102,13 @@ const API = {
 
   getSales() {
     return this.request('/sales');
+  },
+
+  // Stock Notifications
+  sendStockNotification(data) {
+    return this.request('/notifications/stock-alert', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    });
   }
 };

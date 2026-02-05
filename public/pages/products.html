@@ -44,6 +44,10 @@
               <label for="productBarcode">Barcode (optional):</label>
               <input type="text" id="productBarcode" placeholder="Scan or type barcode">
             </div>
+            <div class="form-group">
+              <label for="productHsCode">HS Code (optional):</label>
+              <input type="text" id="productHsCode" placeholder="e.g., 1006.30">
+            </div>
           </div>
           <div class="form-row">
             <div class="form-group">
@@ -72,6 +76,7 @@
               <th>Price</th>
               <th>Stock</th>
               <th>Barcode</th>
+              <th>HS Code</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -121,6 +126,11 @@
         <div class="form-group">
           <label for="editorProductBarcode">Barcode</label>
           <input type="text" id="editorProductBarcode">
+        </div>
+
+        <div class="form-group">
+          <label for="editorProductHsCode">HS Code</label>
+          <input type="text" id="editorProductHsCode">
         </div>
 
         <div class="modal-footer">

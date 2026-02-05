@@ -282,5 +282,201 @@
       }
     ],
     "created_at": "2026-01-30T08:25:58.722Z"
+  },
+  {
+    "id": 15,
+    "userId": 3,
+    "total": 3.575,
+    "tax": 0.325,
+    "items_count": 1,
+    "items": [
+      {
+        "id": 3,
+        "name": "Sugar 1kg",
+        "price": 3.25,
+        "quantity": 1
+      }
+    ],
+    "created_at": "2026-02-05T10:56:58.917Z"
+  },
+  {
+    "id": 16,
+    "userId": 1,
+    "total": 10.978000000000002,
+    "tax": 0.9980000000000001,
+    "items_count": 1,
+    "items": [
+      {
+        "id": 4,
+        "name": "Milk 1L",
+        "price": 4.99,
+        "quantity": 2
+      }
+    ],
+    "created_at": "2026-02-05T11:04:34.516Z"
+  },
+  {
+    "id": 17,
+    "userId": 1,
+    "total": 2.75,
+    "tax": 0.25,
+    "items_count": 1,
+    "items": [
+      {
+        "id": 5,
+        "name": "Bread",
+        "price": 2.5,
+        "quantity": 1
+      }
+    ],
+    "created_at": "2026-02-05T12:20:45.251Z"
+  },
+  {
+    "id": 18,
+    "userId": 1,
+    "total": 5.489000000000001,
+    "tax": 0.49900000000000005,
+    "items_count": 1,
+    "items": [
+      {
+        "id": 4,
+        "name": "Milk 1L",
+        "price": 4.99,
+        "quantity": 1,
+        "barcode": "100000000004",
+        "hscode": "0401.20"
+      }
+    ],
+    "created_at": "2026-02-05T12:34:29.249Z"
+  },
+  {
+    "id": 19,
+    "userId": 4,
+    "total": 17.039,
+    "tax": 1.5490000000000002,
+    "items_count": 2,
+    "items": [
+      {
+        "id": 1,
+        "name": "Rice 5kg",
+        "price": 12.99,
+        "quantity": 1,
+        "barcode": "100000000001",
+        "hscode": "1006.30"
+      },
+      {
+        "id": 5,
+        "name": "Bread",
+        "price": 2.5,
+        "quantity": 1,
+        "barcode": "100000000005",
+        "hscode": "1905.90"
+      }
+    ],
+    "created_at": "2026-02-05T13:02:29.877Z"
+  },
+  {
+    "id": 20,
+    "userId": 4,
+    "total": 2.75,
+    "tax": 0.25,
+    "items_count": 1,
+    "items": [
+      {
+        "id": 5,
+        "name": "Bread",
+        "price": 2.5,
+        "quantity": 1,
+        "barcode": "100000000005",
+        "hscode": "1905.90"
+      }
+    ],
+    "created_at": "2026-02-05T13:03:03.801Z"
+  },
+  {
+    "id": 21,
+    "userId": 1,
+    "total": 23.353000000000005,
+    "tax": 2.1230000000000007,
+    "items_count": 3,
+    "items": [
+      {
+        "id": 1,
+        "name": "Rice 5kg",
+        "price": 12.99,
+        "quantity": 1,
+        "barcode": "100000000001",
+        "hscode": "1006.30"
+      },
+      {
+        "id": 3,
+        "name": "Sugar 1kg",
+        "price": 3.25,
+        "quantity": 1,
+        "barcode": "100000000003",
+        "hscode": "1701.99"
+      },
+      {
+        "id": 4,
+        "name": "Milk 1L",
+        "price": 4.99,
+        "quantity": 1,
+        "barcode": "100000000004",
+        "hscode": "0401.20"
+      }
+    ],
+    "created_at": "2026-02-05T13:39:22.832Z"
+  },
+  {
+    "id": 22,
+    "userId": 1,
+    "total": 9.350000000000001,
+    "tax": 0.8500000000000001,
+    "items_count": 1,
+    "items": [
+      {
+        "id": 2,
+        "name": "Cooking Oil 2L",
+        "price": 8.5,
+        "quantity": 1,
+        "barcode": "100000000002",
+        "hscode": "1512.11"
+      }
+    ],
+    "created_at": "2026-02-05T13:52:52.138Z"
+  },
+  {
+    "id": 23,
+    "userId": 1,
+    "total": 17.589000000000002,
+    "tax": 1.5990000000000002,
+    "items_count": 3,
+    "items": [
+      {
+        "id": 1,
+        "name": "Rice 5kg",
+        "price": 12.99,
+        "quantity": 1,
+        "barcode": "100000000001",
+        "hscode": "1006.30"
+      },
+      {
+        "id": 7,
+        "name": "Fanta",
+        "price": 2,
+        "quantity": 1,
+        "barcode": "5449000010049",
+        "hscode": "78877"
+      },
+      {
+        "id": 6,
+        "name": "Vaseline",
+        "price": 1,
+        "quantity": 1,
+        "barcode": "6001085120946",
+        "hscode": "1002"
+      }
+    ],
+    "created_at": "2026-02-05T14:10:11.335Z"
   }
 ]

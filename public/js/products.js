@@ -1,8 +1,17 @@
 const ProductsModule = {
-  STORAGE_KEY: 'pos.products',
+  products: [],
+
+  isBarcodeDuplicate(barcode, ignoreId = null) {
+    const normalized = String(barcode || '').trim();
+    if (!normalized) return false;
+
+    return this.products.some(product => {
+      if (ignoreId !== null && product.id === ignoreId) return false;
+      return String(product.barcode || '').trim() === normalized;
+    });
+  },
 
   async init() {
-    this.initializeSampleProducts();
     this.setupEventListeners();
     this.updateUserDisplay();
     this.updateDateTime(); // Add date/time display
@@ -10,20 +19,6 @@ const ProductsModule = {
 
     // Update time every second
     setInterval(() => this.updateDateTime(), 1000);
-  },
-
-  initializeSampleProducts() {
-    const products = this.getStoredProducts();
-    if (products.length === 0) {
-      const samples = [
-        { id: 1, name: 'Rice 5kg', price: 12.99, unit: 'bag', category: 'Groceries', stock: 50, barcode: '100000000001' },
-        { id: 2, name: 'Cooking Oil 2L', price: 8.50, unit: 'bottle', category: 'Groceries', stock: 30, barcode: '100000000002' },
-        { id: 3, name: 'Sugar 1kg', price: 3.25, unit: 'pack', category: 'Groceries', stock: 75, barcode: '100000000003' },
-        { id: 4, name: 'Milk 1L', price: 4.99, unit: 'carton', category: 'Dairy', stock: 40, barcode: '100000000004' },
-        { id: 5, name: 'Bread', price: 2.50, unit: 'loaf', category: 'Bakery', stock: 60, barcode: '100000000005' }
-      ];
-      this.setStoredProducts(samples);
-    }
   },
 
   setupEventListeners() {
@@ -47,21 +42,10 @@ const ProductsModule = {
     }
   },
 
-  getStoredProducts() {
-    try {
-      return JSON.parse(localStorage.getItem(this.STORAGE_KEY)) || [];
-    } catch {
-      return [];
-    }
-  },
-
-  setStoredProducts(products) {
-    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(products));
-  },
-
   async loadProductsTable() {
     try {
-      const products = this.getStoredProducts();
+      const products = await API.getProducts();
+      this.products = products;
       const tbody = document.getElementById('productsTableBody');
       const loadingStatus = document.getElementById('productsLoadingStatus');
 
@@ -75,6 +59,7 @@ const ProductsModule = {
           <td>$${Number(product.price).toFixed(2)}</td>
           <td>${product.stock}</td>
           <td>${product.barcode || '-'}</td>
+          <td>${product.hscode || '-'}</td>
           <td class="actions">
             <input type="number" class="stock-input" placeholder="Add Qty" min="1">
             <button class="btn btn-secondary btn-sm" onclick="ProductsModule.updateStock(${product.id}, this)">Update Stock</button>
@@ -102,17 +87,19 @@ const ProductsModule = {
     const category = document.getElementById('productCategory').value.trim();
     const stock = parseInt(document.getElementById('productStock').value, 10) || 0;
     const barcode = document.getElementById('productBarcode').value.trim();
+    const hscode = document.getElementById('productHsCode').value.trim();
 
     if (!name || Number.isNaN(price)) {
       alert('Name and valid price are required.');
       return;
     }
 
-    const products = this.getStoredProducts();
-    const nextId = products.length ? Math.max(...products.map(p => p.id)) + 1 : 1;
+    if (this.isBarcodeDuplicate(barcode)) {
+      alert('Barcode must be unique. Another product already uses this barcode.');
+      return;
+    }
 
-    products.push({ id: nextId, name, price, unit, category, stock, barcode });
-    this.setStoredProducts(products);
+    await API.addProduct({ name, price, unit, category, stock, barcode, hscode });
 
     document.getElementById('addProductForm').reset();
     await this.loadProductsTable();
@@ -128,20 +115,14 @@ const ProductsModule = {
       return;
     }
 
-    const products = this.getStoredProducts();
-    const product = products.find(p => p.id === productId);
-    if (!product) return;
-
-    product.stock = (parseInt(product.stock, 10) || 0) + quantity;
-    this.setStoredProducts(products);
+    await API.updateProductStock(productId, quantity);
 
     input.value = '';
     await this.loadProductsTable();
   },
 
   async editProduct(productId) {
-    const products = this.getStoredProducts();
-    const product = products.find(p => p.id === productId);
+    const product = this.products.find(p => p.id === productId);
     if (!product) return;
 
     const name = prompt('Name:', product.name);
@@ -165,21 +146,35 @@ const ProductsModule = {
     const barcode = prompt('Barcode:', product.barcode || '');
     if (barcode === null) return;
 
+    const hscode = prompt('HS Code:', product.hscode || '');
+    if (hscode === null) return;
+
     if (!name.trim() || Number.isNaN(price) || Number.isNaN(stock)) {
       alert('Invalid values.');
       return;
     }
 
-    Object.assign(product, { name: name.trim(), price, category: category.trim(), unit: unit.trim(), stock, barcode: barcode.trim() });
-    this.setStoredProducts(products);
+    if (this.isBarcodeDuplicate(barcode, productId)) {
+      alert('Barcode must be unique. Another product already uses this barcode.');
+      return;
+    }
+
+    await API.updateProduct(productId, {
+      name: name.trim(),
+      price,
+      category: category.trim(),
+      unit: unit.trim(),
+      stock,
+      barcode: barcode.trim(),
+      hscode: hscode.trim()
+    });
     await this.loadProductsTable();
   },
 
   async deleteProduct(productId) {
     if (!confirm('Delete this product? This cannot be undone.')) return;
 
-    const products = this.getStoredProducts().filter(p => p.id !== productId);
-    this.setStoredProducts(products);
+    await API.deleteProduct(productId);
     await this.loadProductsTable();
   },
 

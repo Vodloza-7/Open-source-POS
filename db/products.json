@@ -1,0 +1,74 @@
+[
+  {
+    "id": 1,
+    "name": "Rice 5kg",
+    "price": 12.99,
+    "unit": "bag",
+    "category": "Groceries",
+    "stock": 0,
+    "barcode": "100000000001",
+    "hscode": "1006.30"
+  },
+  {
+    "id": 2,
+    "name": "Cooking Oil 2L",
+    "price": 8.5,
+    "unit": "bottle",
+    "category": "Groceries",
+    "stock": 0,
+    "barcode": "100000000002",
+    "hscode": "1512.11"
+  },
+  {
+    "id": 3,
+    "name": "Sugar 1kg",
+    "price": 3.25,
+    "unit": "pack",
+    "category": "Groceries",
+    "stock": 74,
+    "barcode": "100000000003",
+    "hscode": "1701.99"
+  },
+  {
+    "id": 4,
+    "name": "Milk 1L",
+    "price": 4.99,
+    "unit": "carton",
+    "category": "Dairy",
+    "stock": 38,
+    "barcode": "100000000004",
+    "hscode": "0401.20"
+  },
+  {
+    "id": 5,
+    "name": "Bread",
+    "price": 2.5,
+    "unit": "loaf",
+    "category": "Bakery",
+    "stock": 58,
+    "barcode": "100000000005",
+    "hscode": "1905.90"
+  },
+  {
+    "id": 6,
+    "name": "Vaseline",
+    "price": 1,
+    "unit": "item",
+    "category": "Toiletry",
+    "stock": 1,
+    "barcode": "6001085120946",
+    "hscode": "1002",
+    "created_at": "2026-02-05T14:06:59.891Z"
+  },
+  {
+    "id": 7,
+    "name": "Fanta",
+    "price": 2,
+    "unit": "item",
+    "category": "Drinks",
+    "stock": 9,
+    "barcode": "5449000010049",
+    "hscode": "78877",
+    "created_at": "2026-02-05T14:09:29.054Z"
+  }
+]
