@@ -1,16 +1,4 @@
-# Open-source-POS
-Create a standalone POS Java system
-first day 
-✅ Product catalog with click-to-add interface
-✅ Shopping cart with quantity management
-✅ Automatic tax calculation (10%)
-✅ Total price calculation
-✅ Complete sales transactions
-✅ Product management page
-✅ SQLite database persistence
-✅ REST API
-✅ Responsive design
-✅ Modern UI with Flexbox/CSS Grid
+ Open-sourCE
+ A web based POS system for grocery stores. The system can be used online and offline to cater for remote areas with low internet / unstable internet connection.
+ 
 
-This is a solid foundation. You can extend 
-installments needed
