@@ -28,6 +28,17 @@ const Router = {
         throw new Error(`Page not found: ${pageName}`);
       }
 
+      if (pageName !== 'login' && !Auth.isLoggedIn()) {
+        console.warn(`Access Denied: Not authenticated. Attempted to navigate to '${pageName}'.`);
+        this.navigate('login');
+        return;
+      }
+
+      if (pageName === 'login' && Auth.isLoggedIn()) {
+        this.navigate('pos');
+        return;
+      }
+
       // --- Security Check ---
       if (page.adminOnly && !Auth.isAdmin()) {
         console.warn(`Access Denied: User is not an admin. Attempted to navigate to '${pageName}'.`);

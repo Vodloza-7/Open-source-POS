@@ -22,7 +22,6 @@
         </div>
 
         <button id="manageProductsBtn" class="btn btn-primary">Manage Products</button>
-        <button id="settingsBtn" class="btn btn-primary admin-only">Settings</button>
         <button id="adminDashboardBtn" class="btn btn-primary admin-only">Admin Dashboard</button>
         <button id="salesHistoryBtn" class="btn btn-secondary admin-only">Sales History</button>
         <button id="logoutBtn" class="btn btn-danger">Logout</button>
@@ -120,6 +119,7 @@
           </label>
         </div>
       </div>
+       
 
       <div id="cashPaymentSection" class="payment-section">
         <div class="form-group">
@@ -131,7 +131,8 @@
           <span id="changeDue">$0.00</span>
         </div>
       </div>
-
+      <!-- Add this where you want the currency selector to appear -->
+      <div id="currency-selector-container"></div>
       <div id="cardPaymentSection" class="payment-section" style="display: none;">
         <div class="card-info">
           <p>💳 Please swipe, insert, or tap card</p>

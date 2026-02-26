@@ -2,6 +2,7 @@ const Auth = {
   currentUser: null,
 
   init() {
+    
     const savedUser = localStorage.getItem('user');
     if (savedUser) {
       this.currentUser = JSON.parse(savedUser);

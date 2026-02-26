@@ -57,6 +57,7 @@ const ProductsModule = {
           <td>${product.category || '-'}</td>
           <td>${product.unit || 'item'}</td>
           <td>$${Number(product.price).toFixed(2)}</td>
+          <td>$${Number(product.cost_price || 0).toFixed(2)}</td>
           <td>${product.stock}</td>
           <td>${product.barcode || '-'}</td>
           <td>${product.hscode || '-'}</td>
@@ -83,6 +84,7 @@ const ProductsModule = {
 
     const name = document.getElementById('productName').value.trim();
     const price = parseFloat(document.getElementById('productPrice').value);
+    const costPrice = parseFloat(document.getElementById('productCostPrice').value) || 0;
     const unit = document.getElementById('productUnit').value.trim() || 'item';
     const category = document.getElementById('productCategory').value.trim();
     const stock = parseInt(document.getElementById('productStock').value, 10) || 0;
@@ -99,7 +101,7 @@ const ProductsModule = {
       return;
     }
 
-    await API.addProduct({ name, price, unit, category, stock, barcode, hscode });
+    await API.addProduct({ name, price, costPrice, unit, category, stock, barcode, hscode });
 
     document.getElementById('addProductForm').reset();
     await this.loadProductsTable();
@@ -131,6 +133,9 @@ const ProductsModule = {
     const priceStr = prompt('Price:', product.price);
     if (priceStr === null) return;
 
+    const costPriceStr = prompt('Cost Price:', product.cost_price || 0);
+    if (costPriceStr === null) return;
+
     const category = prompt('Category:', product.category || '');
     if (category === null) return;
 
@@ -141,6 +146,7 @@ const ProductsModule = {
     if (stockStr === null) return;
 
     const price = parseFloat(priceStr);
+    const costPrice = parseFloat(costPriceStr);
     const stock = parseInt(stockStr, 10);
 
     const barcode = prompt('Barcode:', product.barcode || '');
@@ -149,7 +155,7 @@ const ProductsModule = {
     const hscode = prompt('HS Code:', product.hscode || '');
     if (hscode === null) return;
 
-    if (!name.trim() || Number.isNaN(price) || Number.isNaN(stock)) {
+    if (!name.trim() || Number.isNaN(price) || Number.isNaN(costPrice) || Number.isNaN(stock)) {
       alert('Invalid values.');
       return;
     }
@@ -162,6 +168,7 @@ const ProductsModule = {
     await API.updateProduct(productId, {
       name: name.trim(),
       price,
+      costPrice,
       category: category.trim(),
       unit: unit.trim(),
       stock,

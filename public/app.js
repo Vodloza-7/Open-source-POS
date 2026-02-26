@@ -6,7 +6,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.body.innerHTML = '<div class="error"><h1>Fatal Error</h1><p>Application container not found.</p></div>';
     return;
   }
-
+  
   // Initialize router
   Router.init(appContainer);
 

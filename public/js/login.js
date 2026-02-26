@@ -18,8 +18,8 @@ const LoginModule = {
       try {
         const user = await API.login(username, password);
         Auth.setUser(user);
-        loginError.textContent = '';
-        loginStatus.textContent = 'Login successful! Redirecting...';
+        loginError.textContent = 'Are you sure that youre authorized to login  or youre a thief';
+        loginStatus.textContent = 'Login successful!  Welcome to our POS system.';
         loginStatus.className = 'login-status success';
 
         setTimeout(() => {

@@ -1,0 +1,21 @@
+<?php
+// filepath: c:\Users\IMPARTIAL\Desktop\open-pos impartial\Open-source-POS\public\components\currency_selector.php
+if (session_status() === PHP_SESSION_NONE) session_start();
+
+if (isset($_POST['currency'])) {
+    $_SESSION['currency'] = $_POST['currency'];
+    // Optional: redirect to avoid form resubmission
+    header("Location: " . $_SERVER['REQUEST_URI']);
+    exit;
+}
+$currency = $_SESSION['currency'] ?? 'USD';
+?>
+<form method="post" style="margin-bottom:10px;">
+    <label for="currency">Currency:</label>
+    <select name="currency" id="currency" onchange="this.form.submit()">
+        <option value="USD" <?= $currency == 'USD' ? 'selected' : '' ?>>USD</option>
+        <option value="KES" <?= $currency == 'KES' ? 'selected' : '' ?>>KES</option>
+        <option value="EUR" <?= $currency == 'EUR' ? 'selected' : '' ?>>EUR</option>
+        <!-- Add more currencies as needed -->
+    </select>
+</form>

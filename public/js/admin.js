@@ -5,10 +5,19 @@ const AdminModule = {
     this.setupEventListeners();
     this.setupNavigation();
     this.loadSystemSettings();
+    await this.loadConnectionSettings();
+    await this.loadUsersList();
+    await this.loadStockPanel();
     this.setDefaultReportDates();
+    this.setDefaultProfitDate();
+    await this.loadProfitDashboard();
   },
 
   setupEventListeners() {
+    document.getElementById('openDbConnectionBtn')?.addEventListener('click', () => {
+      this.activateSection('database');
+    });
+
     document.getElementById('backToPosBtn')?.addEventListener('click', () => {
       Router.navigate('pos');
     });
@@ -20,6 +29,22 @@ const AdminModule = {
 
     document.getElementById('addUserForm')?.addEventListener('submit', (e) => {
       this.handleAddUser(e);
+    });
+
+    document.getElementById('refreshUsersBtn')?.addEventListener('click', () => {
+      this.loadUsersList();
+    });
+
+    document.getElementById('stockAdjustForm')?.addEventListener('submit', (e) => {
+      this.handleStockAdjust(e);
+    });
+
+    document.getElementById('refreshStockBtn')?.addEventListener('click', () => {
+      this.loadStockPanel();
+    });
+
+    document.getElementById('refreshProfitDashboardBtn')?.addEventListener('click', () => {
+      this.loadProfitDashboard();
     });
 
     document.getElementById('systemSettingsForm')?.addEventListener('submit', (e) => {
@@ -36,6 +61,30 @@ const AdminModule = {
 
     document.getElementById('resetSystemSettingsBtn')?.addEventListener('click', () => {
       this.resetSystemSettings();
+    });
+
+    document.getElementById('connectionSettingsForm')?.addEventListener('submit', (e) => {
+      this.handleConnectionSettingsSave(e);
+    });
+
+    document.getElementById('refreshConnectionSettingsBtn')?.addEventListener('click', () => {
+      this.loadConnectionSettings();
+    });
+
+    document.getElementById('checkServerStatusBtn')?.addEventListener('click', () => {
+      this.checkServerStatus();
+    });
+
+    document.getElementById('restartServerBtn')?.addEventListener('click', () => {
+      this.restartServer();
+    });
+
+    document.getElementById('useXamppDefaultsBtn')?.addEventListener('click', () => {
+      this.applyXamppDefaults();
+    });
+
+    document.getElementById('testDbConnectionBtn')?.addEventListener('click', () => {
+      this.testDatabaseConnection();
     });
 
     document.getElementById('reportForm')?.addEventListener('submit', (e) => {
@@ -64,6 +113,8 @@ const AdminModule = {
       });
     };
 
+    this.activateSection = activateSection;
+
     navButtons.forEach(btn => {
       btn.addEventListener('click', () => activateSection(btn.dataset.section));
     });
@@ -72,7 +123,7 @@ const AdminModule = {
       btn.addEventListener('click', () => activateSection(btn.dataset.sectionTarget));
     });
 
-    activateSection('users');
+    this.activateSection('users');
   },
 
   async handleAddUser(e) {
@@ -94,16 +145,84 @@ const AdminModule = {
       statusEl.textContent = 'User added successfully!';
       statusEl.className = 'status-message success';
       document.getElementById('addUserForm').reset();
+      await this.loadUsersList();
     } catch (error) {
       statusEl.textContent = `Error: ${error.message}`;
       statusEl.className = 'status-message error';
     }
   },
 
+  setUsersStatus(message, type = 'loading') {
+    const statusEl = document.getElementById('usersListStatus');
+    if (!statusEl) return;
+    statusEl.textContent = message;
+    statusEl.className = `status-message ${type}`;
+  },
+
+  formatUserDate(value) {
+    if (!value) return '-';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '-';
+    return date.toLocaleString();
+  },
+
+  renderUsersList(users) {
+    const container = document.getElementById('usersListContainer');
+    if (!container) return;
+
+    if (!Array.isArray(users) || users.length === 0) {
+      container.innerHTML = '<div class="admin-placeholder">No users found.</div>';
+      return;
+    }
+
+    const rows = users.map(user => `
+      <tr>
+        <td>${user.id}</td>
+        <td>${user.name || '-'}</td>
+        <td>${user.username || '-'}</td>
+        <td>${user.role || '-'}</td>
+        <td>${this.formatUserDate(user.created_at)}</td>
+      </tr>
+    `).join('');
+
+    container.innerHTML = `
+      <div class="report-table-wrapper">
+        <table class="sales-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Username</th>
+              <th>Role</th>
+              <th>Created</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+  },
+
+  async loadUsersList() {
+    this.setUsersStatus('Loading users...', 'loading');
+    try {
+      const users = await API.getUsers();
+      this.renderUsersList(users);
+      this.setUsersStatus(`Loaded ${users.length} user(s).`, 'success');
+    } catch (error) {
+      this.setUsersStatus(`Error: ${error.message}`, 'error');
+      const container = document.getElementById('usersListContainer');
+      if (container) {
+        container.innerHTML = '<div class="admin-placeholder">Failed to load users.</div>';
+      }
+    }
+  },
+
   getSystemSettings() {
     return {
       currencyCode: localStorage.getItem('pos.currencyCode') || 'USD',
-      currencySymbol: localStorage.getItem('pos.currencySymbol') || '$'
+      currencySymbol: localStorage.getItem('pos.currencySymbol') || '$',
+      taxRatePercent: Number(localStorage.getItem('pos.taxRatePercent') || '10')
     };
   },
 
@@ -111,9 +230,11 @@ const AdminModule = {
     const settings = this.getSystemSettings();
     const currencyCode = document.getElementById('currencyCode');
     const currencySymbol = document.getElementById('currencySymbol');
+    const taxRate = document.getElementById('taxRate');
 
     if (currencyCode) currencyCode.value = settings.currencyCode;
     if (currencySymbol) currencySymbol.value = settings.currencySymbol;
+    if (taxRate) taxRate.value = Number.isFinite(settings.taxRatePercent) ? settings.taxRatePercent : 10;
 
     this.updateCurrencyPreview();
   },
@@ -136,9 +257,17 @@ const AdminModule = {
 
     const currencyCode = document.getElementById('currencyCode')?.value || 'USD';
     const currencySymbol = document.getElementById('currencySymbol')?.value || '$';
+    const taxRatePercent = Number(document.getElementById('taxRate')?.value || 10);
+
+    if (!Number.isFinite(taxRatePercent) || taxRatePercent < 0 || taxRatePercent > 100) {
+      statusEl.textContent = 'Tax rate must be between 0 and 100.';
+      statusEl.className = 'status-message error';
+      return;
+    }
 
     localStorage.setItem('pos.currencyCode', currencyCode);
     localStorage.setItem('pos.currencySymbol', currencySymbol);
+    localStorage.setItem('pos.taxRatePercent', String(taxRatePercent));
 
     statusEl.textContent = 'System settings saved.';
     statusEl.className = 'status-message success';
@@ -147,6 +276,7 @@ const AdminModule = {
   resetSystemSettings() {
     localStorage.setItem('pos.currencyCode', 'USD');
     localStorage.setItem('pos.currencySymbol', '$');
+    localStorage.setItem('pos.taxRatePercent', '10');
 
     this.loadSystemSettings();
 
@@ -154,6 +284,138 @@ const AdminModule = {
     if (statusEl) {
       statusEl.textContent = 'System settings reset to defaults.';
       statusEl.className = 'status-message loading';
+    }
+  },
+
+  setConnectionStatus(message, type = 'loading') {
+    const statusEl = document.getElementById('connectionSettingsStatus');
+    if (!statusEl) return;
+    statusEl.textContent = message;
+    statusEl.className = `status-message ${type}`;
+  },
+
+  setServerHealthStatus(message, type = 'loading') {
+    const healthEl = document.getElementById('serverHealthStatus');
+    if (!healthEl) return;
+    healthEl.textContent = message;
+    healthEl.className = `connection-health ${type}`;
+  },
+
+  applyConnectionSettingsToForm(settings) {
+    const appPort = document.getElementById('appPort');
+    const dbHost = document.getElementById('dbHost');
+    const dbPort = document.getElementById('dbPort');
+    const dbName = document.getElementById('dbName');
+    const dbUser = document.getElementById('dbUser');
+    const dbPassword = document.getElementById('dbPassword');
+
+    if (appPort) appPort.value = settings?.app?.port ?? 3000;
+    if (dbHost) dbHost.value = settings?.db?.host ?? '127.0.0.1';
+    if (dbPort) dbPort.value = settings?.db?.port ?? 3306;
+    if (dbName) dbName.value = settings?.db?.name ?? 'pos_system';
+    if (dbUser) dbUser.value = settings?.db?.user ?? 'root';
+    if (dbPassword) dbPassword.value = settings?.db?.password ?? '';
+  },
+
+  collectConnectionSettingsFromForm() {
+    return {
+      app: {
+        port: Number(document.getElementById('appPort')?.value || 3000)
+      },
+      db: {
+        host: document.getElementById('dbHost')?.value?.trim() || '127.0.0.1',
+        port: Number(document.getElementById('dbPort')?.value || 3306),
+        name: document.getElementById('dbName')?.value?.trim() || 'pos_system',
+        user: document.getElementById('dbUser')?.value?.trim() || 'root',
+        password: document.getElementById('dbPassword')?.value ?? ''
+      }
+    };
+  },
+
+  applyXamppDefaults() {
+    this.applyConnectionSettingsToForm({
+      app: { port: 3000 },
+      db: {
+        host: '127.0.0.1',
+        port: 3306,
+        name: 'pos_system',
+        user: 'root',
+        password: ''
+      }
+    });
+    this.setConnectionStatus('XAMPP defaults applied. Click "Test Connection" then save.', 'loading');
+  },
+
+  async testDatabaseConnection() {
+    this.setServerHealthStatus('Testing database connection...', 'loading');
+
+    try {
+      const payload = this.collectConnectionSettingsFromForm();
+      const result = await API.testConnectionSettings(payload);
+      const location = `${result.db.host}:${result.db.port}/${result.db.name}`;
+      this.setServerHealthStatus(`Connection test successful: ${location}`, 'success');
+      this.setConnectionStatus('Database connection test passed.', 'success');
+    } catch (error) {
+      this.setServerHealthStatus(`Connection test failed: ${error.message}`, 'error');
+      this.setConnectionStatus(`Error: ${error.message}`, 'error');
+    }
+  },
+
+  async loadConnectionSettings() {
+    this.setConnectionStatus('Loading connection settings...', 'loading');
+    try {
+      const settings = await API.getConnectionSettings();
+      this.applyConnectionSettingsToForm(settings);
+      this.setConnectionStatus('Connection settings loaded.', 'success');
+    } catch (error) {
+      this.setConnectionStatus(`Error: ${error.message}`, 'error');
+    }
+  },
+
+  async handleConnectionSettingsSave(e) {
+    e.preventDefault();
+    this.setConnectionStatus('Saving connection settings...', 'loading');
+    try {
+      const payload = this.collectConnectionSettingsFromForm();
+      const result = await API.updateConnectionSettings(payload);
+      this.setConnectionStatus(result.message || 'Connection settings saved.', 'success');
+      this.applyConnectionSettingsToForm(result);
+      if (result.restartRequired) {
+        this.setServerHealthStatus('Settings saved. Restart the server to apply new connection values.', 'warning');
+      }
+    } catch (error) {
+      this.setConnectionStatus(`Error: ${error.message}`, 'error');
+    }
+  },
+
+  async checkServerStatus() {
+    this.setServerHealthStatus('Checking server status...', 'loading');
+    try {
+      const health = await API.checkServerHealth();
+      const serverState = health.server === 'online' ? 'ONLINE' : String(health.server || 'UNKNOWN').toUpperCase();
+      const databaseState = health.database?.connected ? 'Connected' : 'Not Connected';
+      const dbLocation = `${health.database?.host || '-'}:${health.database?.port || '-'}/${health.database?.name || '-'}`;
+      this.setServerHealthStatus(
+        `Server: ${serverState} | Port: ${health.app?.port || '-'} | Database: ${databaseState} (${dbLocation})`,
+        health.database?.connected ? 'success' : 'error'
+      );
+    } catch (error) {
+      this.setServerHealthStatus(`Server check failed: ${error.message}`, 'error');
+    }
+  },
+
+  async restartServer() {
+    const confirmed = confirm('Restart server now? Unsaved work may be interrupted.');
+    if (!confirmed) return;
+
+    this.setServerHealthStatus('Restarting server...', 'loading');
+    try {
+      const result = await API.restartServer();
+      this.setServerHealthStatus(result.message || 'Restart command sent.', 'warning');
+      this.setConnectionStatus(result.message || 'Restart command sent.', 'loading');
+    } catch (error) {
+      this.setServerHealthStatus(`Restart failed: ${error.message}`, 'error');
+      this.setConnectionStatus(`Error: ${error.message}`, 'error');
     }
   },
 
@@ -171,6 +433,96 @@ const AdminModule = {
 
     if (!endInput.value) endInput.value = end;
     if (!startInput.value) startInput.value = start;
+  },
+
+  setDefaultProfitDate() {
+    const profitDateInput = document.getElementById('profitDate');
+    if (!profitDateInput) return;
+    if (!profitDateInput.value) {
+      profitDateInput.value = new Date().toISOString().slice(0, 10);
+    }
+  },
+
+  setProfitStatus(message, type = 'loading') {
+    const statusEl = document.getElementById('profitDashboardStatus');
+    if (!statusEl) return;
+    statusEl.textContent = message;
+    statusEl.className = `status-message ${type}`;
+  },
+
+  renderSimpleTable(containerId, columns, rows) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    if (!rows || rows.length === 0) {
+      container.innerHTML = '<div class="admin-placeholder">No data for selected date.</div>';
+      return;
+    }
+
+    const header = columns.map(col => `<th>${col.label}</th>`).join('');
+    const body = rows.map(row => {
+      const tds = columns.map(col => {
+        let value = row[col.key];
+        if (col.type === 'money') {
+          value = this.formatMoney(value);
+        }
+        return `<td>${value ?? '-'}</td>`;
+      }).join('');
+      return `<tr>${tds}</tr>`;
+    }).join('');
+
+    container.innerHTML = `
+      <div class="report-table-wrapper">
+        <table class="sales-table">
+          <thead><tr>${header}</tr></thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>
+    `;
+  },
+
+  async loadProfitDashboard() {
+    this.setProfitStatus('Loading profit dashboard...', 'loading');
+    const date = document.getElementById('profitDate')?.value || new Date().toISOString().slice(0, 10);
+
+    try {
+      const data = await API.getProfitDashboard(date);
+
+      const summaryEl = document.getElementById('profitSummaryCards');
+      if (summaryEl) {
+        summaryEl.innerHTML = `
+          <div class="report-preview">
+            <h4>Date: ${data.date}</h4>
+            <p>Total Sales: <strong>${this.formatMoney(data.summary.totalSales)}</strong></p>
+            <p>Total Profit: <strong>${this.formatMoney(data.summary.totalProfit)}</strong></p>
+            <p>Transactions: <strong>${data.summary.transactions}</strong></p>
+            <p>Last Audit Event: <strong>${data.summary.lastAuditAt || '-'}</strong></p>
+          </div>
+        `;
+      }
+
+      this.renderSimpleTable('profitByCurrency', [
+        { key: 'currency', label: 'Currency' },
+        { key: 'salesTotal', label: 'Sales Total', type: 'money' },
+        { key: 'profit', label: 'Profit', type: 'money' },
+        { key: 'transactions', label: 'Transactions' }
+      ], data.byCurrency || []);
+
+      this.renderSimpleTable('profitByCashier', [
+        { key: 'cashierName', label: 'Cashier' },
+        { key: 'salesTotal', label: 'Sales Total', type: 'money' },
+        { key: 'profit', label: 'Profit', type: 'money' },
+        { key: 'transactions', label: 'Transactions' }
+      ], data.byCashier || []);
+
+      this.setProfitStatus('Profit dashboard loaded.', 'success');
+    } catch (error) {
+      this.setProfitStatus(`Error: ${error.message}`, 'error');
+      const summaryEl = document.getElementById('profitSummaryCards');
+      if (summaryEl) {
+        summaryEl.innerHTML = '<div class="admin-placeholder">Failed to load profit dashboard.</div>';
+      }
+    }
   },
 
   getReportFormValues() {
@@ -213,7 +565,103 @@ const AdminModule = {
     if (type === 'sales-by-cashier') return 'Sales Report by Cashier';
     if (type === 'audit-trail') return 'Audit Trail Log';
     if (type === 'cash-sales') return 'Cash Sales Report';
+    if (type === 'end-of-day-profit') return 'End of Day Profit Report';
     return 'POS Report';
+  },
+
+  setStockStatus(message, type = 'loading') {
+    const statusEl = document.getElementById('stockAdjustStatus');
+    if (!statusEl) return;
+    statusEl.textContent = message;
+    statusEl.className = `status-message ${type}`;
+  },
+
+  renderStockProductOptions(products) {
+    const select = document.getElementById('stockProductId');
+    if (!select) return;
+
+    select.innerHTML = products.map(product => `
+      <option value="${product.id}">${product.name} (Stock: ${Number(product.stock) || 0})</option>
+    `).join('');
+  },
+
+  renderStockTable(products) {
+    const container = document.getElementById('stockTableContainer');
+    if (!container) return;
+
+    if (!products || products.length === 0) {
+      container.innerHTML = '<div class="admin-placeholder">No products available.</div>';
+      return;
+    }
+
+    const rows = products.map(product => `
+      <tr>
+        <td>${product.id}</td>
+        <td>${product.name}</td>
+        <td>${product.category || '-'}</td>
+        <td>${product.unit || 'item'}</td>
+        <td>${Number(product.stock) || 0}</td>
+      </tr>
+    `).join('');
+
+    container.innerHTML = `
+      <div class="report-table-wrapper">
+        <table class="sales-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Category</th>
+              <th>Unit</th>
+              <th>Stock</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+  },
+
+  async loadStockPanel() {
+    this.setStockStatus('Loading stock data...', 'loading');
+    try {
+      const products = await API.getProducts();
+      this.renderStockProductOptions(products);
+      this.renderStockTable(products);
+      this.setStockStatus('Stock data loaded.', 'success');
+    } catch (error) {
+      this.setStockStatus(`Error: ${error.message}`, 'error');
+      const container = document.getElementById('stockTableContainer');
+      if (container) {
+        container.innerHTML = '<div class="admin-placeholder">Failed to load stock data.</div>';
+      }
+    }
+  },
+
+  async handleStockAdjust(e) {
+    e.preventDefault();
+    this.setStockStatus('Applying stock change...', 'loading');
+
+    const productId = Number(document.getElementById('stockProductId')?.value || 0);
+    const action = document.getElementById('stockAction')?.value || 'add';
+    const quantity = Number(document.getElementById('stockQuantity')?.value || 0);
+    const reason = document.getElementById('stockReason')?.value?.trim() || '';
+
+    if (!productId || !quantity || quantity <= 0) {
+      this.setStockStatus('Select product and enter a valid quantity.', 'error');
+      return;
+    }
+
+    const delta = action === 'remove' ? -Math.abs(quantity) : Math.abs(quantity);
+
+    try {
+      await API.adjustStock({ productId, delta, reason });
+      this.setStockStatus('Stock updated successfully.', 'success');
+      document.getElementById('stockAdjustForm')?.reset();
+      await this.loadStockPanel();
+    } catch (error) {
+      this.setStockStatus(`Error: ${error.message}`, 'error');
+    }
   },
 
   renderReportPreview(report) {
@@ -233,7 +681,7 @@ const AdminModule = {
       const tds = report.columns.map(col => {
         const key = report.columnMap[col];
         let val = row[key] ?? '';
-        if (typeof val === 'number' && (key === 'totalSales' || key === 'total' || key === 'amount')) {
+        if (typeof val === 'number' && (key === 'totalSales' || key === 'salesTotal' || key === 'total' || key === 'amount' || key === 'profit')) {
           val = this.formatMoney(val);
         }
         return `<td>${val}</td>`;
@@ -264,7 +712,7 @@ const AdminModule = {
       const tds = report.columns.map(col => {
         const key = report.columnMap[col];
         let val = row[key] ?? '';
-        if (typeof val === 'number' && (key === 'totalSales' || key === 'total' || key === 'amount')) {
+        if (typeof val === 'number' && (key === 'totalSales' || key === 'salesTotal' || key === 'total' || key === 'amount' || key === 'profit')) {
           val = this.formatMoney(val);
         }
         return `<td>${val}</td>`;

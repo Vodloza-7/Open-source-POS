@@ -5,6 +5,7 @@
         <h1>Administrator Dashboard</h1>
       </div>
       <div class="header-right">
+        <button id="openDbConnectionBtn" class="btn btn-dark">Database Connection</button>
         <button id="backToPosBtn" class="btn btn-secondary">Back to POS</button>
         <button id="logoutBtn" class="btn btn-danger">Logout</button>
       </div>
@@ -26,7 +27,9 @@
           <button class="admin-nav-btn is-active" data-section="users">Manage Users</button>
           <button class="admin-nav-btn" data-section="stock">Manage Stock</button>
           <button class="admin-nav-btn" data-section="suppliers">Manage Suppliers</button>
-           <button class="admin-nav-btn" data-section="reports">REPORTS</button>
+          <button class="admin-nav-btn" data-section="profit">Profit Dashboard</button>
+          <button class="admin-nav-btn" data-section="database">Database Connection</button>
+          <button class="admin-nav-btn" data-section="reports">Reports</button>
           <button class="admin-nav-btn" data-section="settings">CURRENCY & TAX SETTINGS</button>
         </nav>
 
@@ -34,7 +37,9 @@
           <button class="btn btn-primary full-width" data-section-target="users">Add User</button>
           <button class="btn btn-dark full-width" data-section-target="stock">Update Stock</button>
           <button class="btn btn-danger full-width" data-section-target="suppliers">Review Suppliers</button>
-           <button class="btn btn-secondary full-width" data-section-target="reports">Generate Reports</button>
+          <button class="btn btn-primary full-width" data-section-target="profit">Profit Dashboard</button>
+          <button class="btn btn-dark full-width" data-section-target="database">Database Connection</button>
+          <button class="btn btn-secondary full-width" data-section-target="reports">Generate Reports</button>
         </div>
       </aside>
 
@@ -46,8 +51,8 @@
               <p>Invite, onboard, and maintain system access.</p>
             </div>
             <div class="panel-actions">
-              <button class="btn btn-primary">Add User</button>
-              <button class="btn btn-dark">Export</button>
+              <button class="btn btn-primary" data-section-target="users">Add User</button>
+              <button class="btn btn-dark" id="refreshUsersBtn" type="button">Refresh Users</button>
             </div>
           </div>
 
@@ -75,7 +80,8 @@
 
           <div class="panel-frame">
             <h3>Current Users</h3>
-            <div class="admin-placeholder">User directory will appear here once connected.</div>
+            <div id="usersListContainer" class="admin-placeholder">Loading users...</div>
+            <div id="usersListStatus" class="status-message"></div>
           </div>
         </div>
 
@@ -83,30 +89,47 @@
           <div class="panel-header">
             <div>
               <h2>Manage Stock</h2>
-              <p>Monitor inventory levels and adjust stock counts.</p>
+              <p>Add stock, remove stock, and view current stock levels in one place.</p>
             </div>
             <div class="panel-actions">
-              <button class="btn btn-primary">Add Item</button>
-              <button class="btn btn-dark">Import CSV</button>
-            </div>
-          </div>
-
-          <div class="panel-frame admin-grid">
-            <div class="admin-tile">
-              <h3>Low Stock Alerts</h3>
-              <p>Track items nearing minimum thresholds.</p>
-              <button class="btn btn-danger">View Alerts</button>
-            </div>
-            <div class="admin-tile">
-              <h3>Stock Adjustments</h3>
-              <p>Record inventory corrections and audits.</p>
-              <button class="btn btn-primary">Start Audit</button>
+              <button class="btn btn-dark" id="refreshStockBtn" type="button">Refresh Stock</button>
             </div>
           </div>
 
           <div class="panel-frame">
+            <form id="stockAdjustForm" class="system-settings-form">
+              <h3>Stock Adjustment</h3>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="stockProductId">Product</label>
+                  <select id="stockProductId" required></select>
+                </div>
+                <div class="form-group">
+                  <label for="stockAction">Action</label>
+                  <select id="stockAction" required>
+                    <option value="add">Add Stock</option>
+                    <option value="remove">Remove Stock</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="stockQuantity">Quantity</label>
+                  <input type="number" id="stockQuantity" min="1" required>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="stockReason">Reason</label>
+                  <input type="text" id="stockReason" placeholder="e.g. Restock, Damaged items">
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary">Apply Stock Change</button>
+            </form>
+            <div id="stockAdjustStatus" class="status-message"></div>
+          </div>
+
+          <div class="panel-frame">
             <h3>Stock Overview</h3>
-            <div class="admin-placeholder">Inventory table will appear here.</div>
+            <div id="stockTableContainer" class="admin-placeholder">Loading stock...</div>
           </div>
         </div>
 
@@ -141,6 +164,34 @@
           </div>
         </div>
 
+        <div class="admin-panel" id="admin-panel-profit" data-section="profit">
+          <div class="panel-header">
+            <div>
+              <h2>Profit Dashboard</h2>
+              <p>Daily totals, currency profit split, and cashier contribution from XAMPP transactions.</p>
+            </div>
+            <div class="panel-actions">
+              <input type="date" id="profitDate">
+              <button class="btn btn-dark" id="refreshProfitDashboardBtn" type="button">Refresh</button>
+            </div>
+          </div>
+
+          <div class="panel-frame">
+            <div id="profitSummaryCards" class="admin-placeholder">Loading profit dashboard...</div>
+            <div id="profitDashboardStatus" class="status-message"></div>
+          </div>
+
+          <div class="panel-frame">
+            <h3>By Currency</h3>
+            <div id="profitByCurrency" class="admin-placeholder">No data.</div>
+          </div>
+
+          <div class="panel-frame">
+            <h3>By Cashier</h3>
+            <div id="profitByCashier" class="admin-placeholder">No data.</div>
+          </div>
+        </div>
+
         <div class="admin-panel" id="admin-panel-settings" data-section="settings">
           <div class="panel-header">
             <div>
@@ -172,6 +223,10 @@
                   <label for="currencySymbol">Currency Symbol</label>
                   <input type="text" id="currencySymbol" maxlength="4" required>
                 </div>
+                <div class="form-group">
+                  <label for="taxRate">Tax Rate (%)</label>
+                  <input type="number" id="taxRate" min="0" max="100" step="0.01" required>
+                </div>
               </div>
               <div class="form-row">
                 <div class="form-group">
@@ -182,6 +237,65 @@
               <button type="submit" class="btn btn-primary">Save Settings</button>
             </form>
             <div id="systemSettingsStatus" class="status-message"></div>
+          </div>
+
+        </div>
+
+        <div class="admin-panel" id="admin-panel-database" data-section="database">
+          <div class="panel-header">
+            <div>
+              <h2>Database Connection</h2>
+              <p>Configure server and MySQL/XAMPP database settings.</p>
+            </div>
+            <div class="panel-actions">
+              <button class="btn btn-danger" id="restartServerBtn" type="button">Restart Server</button>
+              <button class="btn btn-dark" id="refreshConnectionSettingsBtn" type="button">Reload Settings</button>
+              <button class="btn btn-secondary" id="checkServerStatusBtn" type="button">Check Server Status</button>
+            </div>
+          </div>
+
+          <div class="panel-frame">
+            <form id="connectionSettingsForm" class="system-settings-form">
+              <h3>Server Database Configuration</h3>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="appPort">Server Port</label>
+                  <input type="number" id="appPort" min="1" max="65535" required>
+                </div>
+                <div class="form-group">
+                  <label for="dbHost">Database Host</label>
+                  <input type="text" id="dbHost" placeholder="127.0.0.1" required>
+                </div>
+                <div class="form-group">
+                  <label for="dbPort">Database Port</label>
+                  <input type="number" id="dbPort" min="1" max="65535" required>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="dbName">Database Name</label>
+                  <input type="text" id="dbName" placeholder="pos_system" required>
+                </div>
+                <div class="form-group">
+                  <label for="dbUser">Database User</label>
+                  <input type="text" id="dbUser" placeholder="root" required>
+                </div>
+                <div class="form-group">
+                  <label for="dbPassword">Database Password</label>
+                  <input type="password" id="dbPassword" placeholder="">
+                </div>
+              </div>
+
+              <div class="panel-actions">
+                <button type="button" id="useXamppDefaultsBtn" class="btn btn-secondary">Use XAMPP Defaults</button>
+                <button type="button" id="testDbConnectionBtn" class="btn btn-dark">Test Connection</button>
+                <button type="submit" class="btn btn-primary">Save Connection Settings</button>
+              </div>
+            </form>
+
+            <div id="connectionSettingsStatus" class="status-message"></div>
+            <div class="connection-health" id="serverHealthStatus">Server status not checked yet.</div>
           </div>
         </div>
 
@@ -202,6 +316,7 @@
                      <option value="sales-by-cashier">Sales Report by Cashier</option>
                      <option value="audit-trail">Audit Trail Log</option>
                      <option value="cash-sales">Cash Sales Only</option>
+                     <option value="end-of-day-profit">End of Day Profit</option>
                    </select>
                  </div>
                  <div class="form-group">

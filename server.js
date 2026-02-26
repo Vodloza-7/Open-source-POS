@@ -3,19 +3,25 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const mysql = require('mysql2/promise');
 const nodemailer = require('nodemailer');
+const fs = require('fs');
+const path = require('path');
+const config = require('./config/server.config');
 
 const app = express();
-const PORT = 3000;
-const DB_HOST = process.env.DB_HOST || '127.0.0.1';
-const DB_PORT = Number(process.env.DB_PORT || 3306);
-const DB_USER = process.env.DB_USER || 'root';
-const DB_PASSWORD = process.env.DB_PASSWORD || '';
-const DB_NAME = process.env.DB_NAME || 'pos_system';
-const SMTP_HOST = process.env.SMTP_HOST || '';
-const SMTP_PORT = Number(process.env.SMTP_PORT || 587);
-const SMTP_USER = process.env.SMTP_USER || '';
-const SMTP_PASS = process.env.SMTP_PASS || '';
-const SMTP_FROM = process.env.SMTP_FROM || 'no-reply@pos.local';
+const PORT = config.app.port;
+const DB_HOST = config.db.host;
+const DB_PORT = config.db.port;
+const DB_USER = config.db.user;
+const DB_PASSWORD = config.db.password;
+const DB_NAME = config.db.name;
+const SMTP_HOST = config.smtp.host;
+const SMTP_PORT = config.smtp.port;
+const SMTP_USER = config.smtp.user;
+const SMTP_PASS = config.smtp.pass;
+const SMTP_FROM = config.smtp.from;
+const CONFIG_FILE_PATH = path.join(__dirname, 'config', 'server.config.js');
+const LEGACY_USERS_FILE_PATH = path.join(__dirname, 'db', 'users.json');
+const SERVER_STARTED_AT = new Date();
 let pool;
 
 function sanitizeAuditPayload(payload = {}) {
@@ -60,10 +66,233 @@ function toIsoDate(value) {
   return d.toISOString().slice(0, 10);
 }
 
+function normalizePort(value, fallback) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  if (parsed < 1 || parsed > 65535) return fallback;
+  return Math.round(parsed);
+}
+
+function normalizeText(value, fallback = '') {
+  if (typeof value !== 'string') return fallback;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : fallback;
+}
+
+async function addColumnIfMissing(tableName, columnDefinition) {
+  try {
+    await pool.query(`ALTER TABLE ${tableName} ADD COLUMN ${columnDefinition}`);
+  } catch (error) {
+    if (error.code !== 'ER_DUP_FIELDNAME') {
+      throw error;
+    }
+  }
+}
+
+function getCurrentConnectionSettings() {
+  return {
+    app: {
+      port: PORT
+    },
+    db: {
+      host: DB_HOST,
+      port: DB_PORT,
+      user: DB_USER,
+      password: DB_PASSWORD,
+      name: DB_NAME
+    },
+    restartRequired: false
+  };
+}
+
+function serializeConfigFile(nextConfig) {
+  return [
+    'const config = ' + JSON.stringify(nextConfig, null, 2) + ';',
+    '',
+    'module.exports = config;',
+    ''
+  ].join('\n');
+}
+
+async function writeConnectionSettings(payload = {}) {
+  const nextConfig = {
+    app: {
+      port: normalizePort(payload.app?.port, PORT)
+    },
+    db: {
+      host: normalizeText(payload.db?.host, DB_HOST),
+      port: normalizePort(payload.db?.port, DB_PORT),
+      user: normalizeText(payload.db?.user, DB_USER),
+      password: typeof payload.db?.password === 'string' ? payload.db.password : DB_PASSWORD,
+      name: normalizeText(payload.db?.name, DB_NAME)
+    },
+    smtp: {
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      user: SMTP_USER,
+      pass: SMTP_PASS,
+      from: SMTP_FROM
+    }
+  };
+
+  await fs.promises.writeFile(CONFIG_FILE_PATH, serializeConfigFile(nextConfig), 'utf8');
+
+  return {
+    app: nextConfig.app,
+    db: nextConfig.db,
+    restartRequired: true
+  };
+}
+
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
 app.use(express.static('public'));
+
+app.get('/api/health', async (req, res) => {
+  const status = {
+    server: 'online',
+    app: {
+      port: PORT,
+      uptimeSeconds: Math.floor((Date.now() - SERVER_STARTED_AT.getTime()) / 1000)
+    },
+    database: {
+      connected: false,
+      host: DB_HOST,
+      port: DB_PORT,
+      name: DB_NAME
+    },
+    checkedAt: new Date().toISOString()
+  };
+
+  try {
+    if (pool) {
+      await pool.query('SELECT 1');
+      status.database.connected = true;
+    }
+    res.json(status);
+  } catch (error) {
+    status.server = 'degraded';
+    status.database.error = error.message;
+    res.status(503).json(status);
+  }
+});
+
+app.get('/api/admin/connection-settings', (req, res) => {
+  res.json(getCurrentConnectionSettings());
+});
+
+app.put('/api/admin/connection-settings', async (req, res) => {
+  try {
+    const saved = await writeConnectionSettings(req.body || {});
+    await logAudit('admin.connection-settings.updated', 'admin', {
+      appPort: saved.app.port,
+      dbHost: saved.db.host,
+      dbPort: saved.db.port,
+      dbName: saved.db.name,
+      dbUser: saved.db.user
+    });
+    res.json({
+      success: true,
+      message: 'Connection settings saved to config file. Restart server to apply changes.',
+      ...saved
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to save connection settings: ' + error.message });
+  }
+});
+
+app.post('/api/admin/connection-settings/test', async (req, res) => {
+  const payload = req.body || {};
+  const testConfig = {
+    host: normalizeText(payload.db?.host, DB_HOST),
+    port: normalizePort(payload.db?.port, DB_PORT),
+    user: normalizeText(payload.db?.user, DB_USER),
+    password: typeof payload.db?.password === 'string' ? payload.db.password : DB_PASSWORD,
+    name: normalizeText(payload.db?.name, DB_NAME)
+  };
+
+  let testConn;
+  try {
+    testConn = await mysql.createConnection({
+      host: testConfig.host,
+      port: testConfig.port,
+      user: testConfig.user,
+      password: testConfig.password,
+      multipleStatements: true
+    });
+
+    await testConn.query(`CREATE DATABASE IF NOT EXISTS \`${testConfig.name}\``);
+    await testConn.query(`USE \`${testConfig.name}\``);
+    await testConn.query('SELECT 1 AS ok');
+
+    await logAudit('admin.connection-settings.test', 'admin', {
+      dbHost: testConfig.host,
+      dbPort: testConfig.port,
+      dbName: testConfig.name,
+      dbUser: testConfig.user,
+      result: 'success'
+    });
+
+    res.json({
+      success: true,
+      message: 'Database connection test successful.',
+      db: {
+        host: testConfig.host,
+        port: testConfig.port,
+        name: testConfig.name,
+        user: testConfig.user
+      }
+    });
+  } catch (error) {
+    await logAudit('admin.connection-settings.test', 'admin', {
+      dbHost: testConfig.host,
+      dbPort: testConfig.port,
+      dbName: testConfig.name,
+      dbUser: testConfig.user,
+      result: 'failed',
+      error: error.message
+    });
+
+    res.status(400).json({ error: `Database connection failed: ${error.message}` });
+  } finally {
+    if (testConn) {
+      await testConn.end();
+    }
+  }
+});
+
+app.post('/api/admin/restart', async (req, res) => {
+  try {
+    const canSelfRestart = Boolean(process.env.pm_id || process.env.ENABLE_SELF_RESTART === 'true');
+
+    if (!canSelfRestart) {
+      await logAudit('admin.server.restart.requested', 'admin', {
+        mode: 'manual-required',
+        reason: 'No process manager detected'
+      });
+
+      return res.status(400).json({
+        error: 'Automatic restart is not available in this runtime. Please restart manually from terminal.'
+      });
+    }
+
+    await logAudit('admin.server.restart.requested', 'admin', {
+      mode: 'self-restart'
+    });
+
+    res.json({
+      success: true,
+      message: 'Server restart initiated. Reconnect in a few seconds.'
+    });
+
+    setTimeout(() => {
+      process.exit(0);
+    }, 600);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to restart server: ' + error.message });
+  }
+});
 
 function getDefaultProducts() {
   return [
@@ -116,6 +345,7 @@ async function initDatabase() {
       barcode VARCHAR(100) NULL,
       hscode VARCHAR(100) NULL,
       price DECIMAL(10,2) NOT NULL,
+      cost_price DECIMAL(10,2) NOT NULL DEFAULT 0,
       stock INT NOT NULL DEFAULT 0,
       unit VARCHAR(50) NOT NULL DEFAULT 'item',
       category VARCHAR(100) NULL,
@@ -129,10 +359,67 @@ async function initDatabase() {
       user_id INT NULL,
       total DECIMAL(10,2) NOT NULL DEFAULT 0,
       tax DECIMAL(10,2) NOT NULL DEFAULT 0,
+      tax_rate DECIMAL(10,4) NOT NULL DEFAULT 0.1000,
+      currency_code VARCHAR(10) NOT NULL DEFAULT 'USD',
+      profit DECIMAL(12,2) NOT NULL DEFAULT 0,
       items_count INT NOT NULL DEFAULT 0,
       payment_method VARCHAR(50) NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       INDEX idx_sales_user_id (user_id)
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS transactions (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      sale_id INT NOT NULL,
+      user_id INT NULL,
+      currency_code VARCHAR(10) NOT NULL,
+      subtotal DECIMAL(12,2) NOT NULL DEFAULT 0,
+      tax DECIMAL(12,2) NOT NULL DEFAULT 0,
+      total DECIMAL(12,2) NOT NULL DEFAULT 0,
+      profit DECIMAL(12,2) NOT NULL DEFAULT 0,
+      payment_method VARCHAR(50) NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_transactions_sale_id (sale_id),
+      INDEX idx_transactions_currency (currency_code),
+      INDEX idx_transactions_created_at (created_at)
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS sales_usd (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      transaction_id INT NOT NULL,
+      sale_id INT NOT NULL,
+      total DECIMAL(12,2) NOT NULL DEFAULT 0,
+      profit DECIMAL(12,2) NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_sales_usd_created_at (created_at)
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS sales_zar (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      transaction_id INT NOT NULL,
+      sale_id INT NOT NULL,
+      total DECIMAL(12,2) NOT NULL DEFAULT 0,
+      profit DECIMAL(12,2) NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_sales_zar_created_at (created_at)
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS sales_zig (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      transaction_id INT NOT NULL,
+      sale_id INT NOT NULL,
+      total DECIMAL(12,2) NOT NULL DEFAULT 0,
+      profit DECIMAL(12,2) NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_sales_zig_created_at (created_at)
     )
   `);
 
@@ -175,6 +462,35 @@ async function initDatabase() {
       INDEX idx_audit_created_at (created_at)
     )
   `);
+
+  await addColumnIfMissing('products', 'cost_price DECIMAL(10,2) NOT NULL DEFAULT 0');
+  await addColumnIfMissing('sales', "tax_rate DECIMAL(10,4) NOT NULL DEFAULT 0.1000");
+  await addColumnIfMissing('sales', "currency_code VARCHAR(10) NOT NULL DEFAULT 'USD'");
+  await addColumnIfMissing('sales', 'profit DECIMAL(12,2) NOT NULL DEFAULT 0');
+
+  if (fs.existsSync(LEGACY_USERS_FILE_PATH)) {
+    try {
+      const rawLegacyUsers = await fs.promises.readFile(LEGACY_USERS_FILE_PATH, 'utf8');
+      const parsedLegacyUsers = JSON.parse(rawLegacyUsers);
+      const legacyUsers = Array.isArray(parsedLegacyUsers) ? parsedLegacyUsers : [];
+
+      for (const legacyUser of legacyUsers) {
+        const username = String(legacyUser.username || '').trim();
+        const password = String(legacyUser.password || '').trim();
+        const name = String(legacyUser.name || username || 'User').trim();
+        const role = String(legacyUser.role || 'cashier').trim() || 'cashier';
+
+        if (!username || !password) continue;
+
+        await pool.query(
+          'INSERT INTO users (username, password, name, role) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE name = VALUES(name), role = VALUES(role)',
+          [username, password, name, role]
+        );
+      }
+    } catch (error) {
+      console.error('Legacy users migration failed:', error.message);
+    }
+  }
 
   const [userRows] = await pool.query('SELECT COUNT(*) AS count FROM users');
   if ((userRows[0]?.count || 0) === 0) {
@@ -264,6 +580,24 @@ app.get('/api/user/:id', async (req, res) => {
   }
 });
 
+app.get('/api/users', async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      'SELECT id, username, name, role, created_at FROM users ORDER BY created_at DESC, id DESC'
+    );
+
+    res.json(rows.map(row => ({
+      id: row.id,
+      username: row.username,
+      name: row.name,
+      role: row.role,
+      created_at: row.created_at
+    })));
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to retrieve users.' });
+  }
+});
+
 
 // --- API Endpoints ---
 
@@ -271,11 +605,12 @@ app.get('/api/user/:id', async (req, res) => {
 app.get('/api/products', async (req, res) => {
   try {
     const [rows] = await pool.query(
-      'SELECT id, name, sku, barcode, hscode, price, stock, unit, category, created_at FROM products ORDER BY name ASC'
+      'SELECT id, name, sku, barcode, hscode, price, cost_price, stock, unit, category, created_at FROM products ORDER BY name ASC'
     );
     res.json(rows.map(row => ({
       ...row,
       price: Number(row.price) || 0,
+      cost_price: Number(row.cost_price) || 0,
       stock: Number(row.stock) || 0
     })));
   } catch (error) {
@@ -286,18 +621,18 @@ app.get('/api/products', async (req, res) => {
 // Add a new product
 app.post('/api/products', async (req, res) => {
   try {
-    const { name, price, category, stock, unit, barcode, hscode, sku } = req.body;
+    const { name, price, costPrice, category, stock, unit, barcode, hscode, sku } = req.body;
     if (!name || price === undefined) {
       return res.status(400).json({ error: 'Name and price are required' });
     }
 
     const [result] = await pool.query(
-      'INSERT INTO products (name, price, category, stock, unit, barcode, hscode, sku) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [name, price, category || '', Number(stock) || 0, unit || 'item', barcode || '', hscode || '', sku || null]
+      'INSERT INTO products (name, price, cost_price, category, stock, unit, barcode, hscode, sku) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [name, price, Number(costPrice) || 0, category || '', Number(stock) || 0, unit || 'item', barcode || '', hscode || '', sku || null]
     );
 
     const [rows] = await pool.query(
-      'SELECT id, name, sku, barcode, hscode, price, stock, unit, category, created_at FROM products WHERE id = ?',
+      'SELECT id, name, sku, barcode, hscode, price, cost_price, stock, unit, category, created_at FROM products WHERE id = ?',
       [result.insertId]
     );
     await logAudit('product.create', 'api', { productId: result.insertId, name, stock: Number(stock) || 0 });
@@ -328,13 +663,55 @@ app.patch('/api/products/:id/stock', async (req, res) => {
     }
 
     const [rows] = await pool.query(
-      'SELECT id, name, sku, barcode, hscode, price, stock, unit, category, created_at FROM products WHERE id = ?',
+      'SELECT id, name, sku, barcode, hscode, price, cost_price, stock, unit, category, created_at FROM products WHERE id = ?',
       [productId]
     );
     await logAudit('product.stock.update', 'api', { productId, quantityAdded: qty });
     res.json(rows[0]);
   } catch (error) {
     res.status(500).json({ error: 'Failed to update product stock.' });
+  }
+});
+
+app.post('/api/stock/adjust', async (req, res) => {
+  try {
+    const productId = Number(req.body?.productId);
+    const delta = Number(req.body?.delta);
+    const reason = String(req.body?.reason || '').trim();
+
+    if (!productId || !Number.isFinite(delta) || delta === 0) {
+      return res.status(400).json({ error: 'productId and non-zero delta are required.' });
+    }
+
+    const [rows] = await pool.query(
+      'SELECT id, name, stock FROM products WHERE id = ? LIMIT 1',
+      [productId]
+    );
+    const product = rows[0];
+    if (!product) {
+      return res.status(404).json({ error: 'Product not found.' });
+    }
+
+    const currentStock = Number(product.stock) || 0;
+    const nextStock = currentStock + delta;
+    if (nextStock < 0) {
+      return res.status(400).json({ error: 'Cannot reduce stock below zero.' });
+    }
+
+    await pool.query('UPDATE products SET stock = ? WHERE id = ?', [nextStock, productId]);
+
+    await logAudit('stock.adjust', 'admin', {
+      productId,
+      productName: product.name,
+      previousStock: currentStock,
+      delta,
+      nextStock,
+      reason
+    });
+
+    res.json({ success: true, productId, previousStock: currentStock, nextStock, delta, reason });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to adjust stock.' });
   }
 });
 
@@ -359,14 +736,19 @@ app.delete('/api/products/:id', async (req, res) => {
 app.post('/api/sales', async (req, res) => {
   const conn = await pool.getConnection();
   try {
-    const { items, tax, total, userId, paymentMethod } = req.body;
+    const { items, subtotal, tax, total, userId, paymentMethod, currencyCode, taxRate } = req.body;
     if (!items || !items.length) {
       return res.status(400).json({ error: 'Sale must include items' });
     }
 
+    const normalizedCurrency = String(currencyCode || 'USD').trim().toUpperCase();
+    const safeCurrency = ['USD', 'ZAR', 'ZIG'].includes(normalizedCurrency) ? normalizedCurrency : 'USD';
+    const normalizedTaxRate = Number.isFinite(Number(taxRate)) ? Number(taxRate) : 0.10;
+
     await conn.beginTransaction();
 
     const normalizedItems = [];
+    let totalProfit = 0;
     for (const item of items) {
       const productId = Number(item.id);
       const requestedQty = Number(item.quantity) || 0;
@@ -375,7 +757,7 @@ app.post('/api/sales', async (req, res) => {
       }
 
       const [rows] = await conn.query(
-        'SELECT id, name, price, stock, barcode, hscode FROM products WHERE id = ? FOR UPDATE',
+        'SELECT id, name, price, cost_price, stock, barcode, hscode FROM products WHERE id = ? FOR UPDATE',
         [productId]
       );
       const product = rows[0];
@@ -389,19 +771,35 @@ app.post('/api/sales', async (req, res) => {
         return res.status(400).json({ error: `Insufficient stock for ${product.name}` });
       }
 
+      const sellingPrice = Number(item.price ?? product.price);
+      const costPrice = Number(product.cost_price) || 0;
+      const itemProfit = (sellingPrice - costPrice) * requestedQty;
+      totalProfit += itemProfit;
+
       normalizedItems.push({
         id: product.id,
         name: product.name,
-        price: Number(item.price ?? product.price),
+        price: sellingPrice,
         quantity: requestedQty,
+        cost_price: costPrice,
+        profit: itemProfit,
         barcode: product.barcode || '',
         hscode: product.hscode || ''
       });
     }
 
     const [saleResult] = await conn.query(
-      'INSERT INTO sales (user_id, total, tax, items_count, payment_method) VALUES (?, ?, ?, ?, ?)',
-      [Number(userId) || null, Number(total) || 0, Number(tax) || 0, normalizedItems.length, paymentMethod || null]
+      'INSERT INTO sales (user_id, total, tax, tax_rate, currency_code, profit, items_count, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        Number(userId) || null,
+        Number(total) || 0,
+        Number(tax) || 0,
+        normalizedTaxRate,
+        safeCurrency,
+        Number(totalProfit) || 0,
+        normalizedItems.length,
+        paymentMethod || null
+      ]
     );
 
     for (const item of normalizedItems) {
@@ -416,18 +814,54 @@ app.post('/api/sales', async (req, res) => {
       );
     }
 
+    const [transactionResult] = await conn.query(
+      'INSERT INTO transactions (sale_id, user_id, currency_code, subtotal, tax, total, profit, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        saleResult.insertId,
+        Number(userId) || null,
+        safeCurrency,
+        Number(subtotal) || (Number(total) || 0) - (Number(tax) || 0),
+        Number(tax) || 0,
+        Number(total) || 0,
+        Number(totalProfit) || 0,
+        paymentMethod || null
+      ]
+    );
+
+    if (safeCurrency === 'USD') {
+      await conn.query(
+        'INSERT INTO sales_usd (transaction_id, sale_id, total, profit) VALUES (?, ?, ?, ?)',
+        [transactionResult.insertId, saleResult.insertId, Number(total) || 0, Number(totalProfit) || 0]
+      );
+    } else if (safeCurrency === 'ZAR') {
+      await conn.query(
+        'INSERT INTO sales_zar (transaction_id, sale_id, total, profit) VALUES (?, ?, ?, ?)',
+        [transactionResult.insertId, saleResult.insertId, Number(total) || 0, Number(totalProfit) || 0]
+      );
+    } else if (safeCurrency === 'ZIG') {
+      await conn.query(
+        'INSERT INTO sales_zig (transaction_id, sale_id, total, profit) VALUES (?, ?, ?, ?)',
+        [transactionResult.insertId, saleResult.insertId, Number(total) || 0, Number(totalProfit) || 0]
+      );
+    }
+
     await conn.commit();
     await logAudit('sale.complete', String(userId || 'unknown'), {
       saleId: saleResult.insertId,
       itemCount: normalizedItems.length,
       paymentMethod: paymentMethod || null,
-      total: Number(total) || 0
+      total: Number(total) || 0,
+      currencyCode: safeCurrency,
+      profit: Number(totalProfit) || 0
     });
     res.status(201).json({
       id: saleResult.insertId,
       userId: Number(userId) || null,
       total: Number(total) || 0,
       tax: Number(tax) || 0,
+      taxRate: normalizedTaxRate,
+      currencyCode: safeCurrency,
+      profit: Number(totalProfit) || 0,
       items_count: normalizedItems.length,
       items: normalizedItems,
       created_at: new Date().toISOString()
@@ -444,7 +878,7 @@ app.post('/api/sales', async (req, res) => {
 app.get('/api/sales', async (req, res) => {
   try {
     const [salesRows] = await pool.query(
-      `SELECT s.id, s.user_id AS userId, s.total, s.tax, s.items_count, s.payment_method, s.created_at,
+      `SELECT s.id, s.user_id AS userId, s.total, s.tax, s.tax_rate, s.currency_code, s.profit, s.items_count, s.payment_method, s.created_at,
               COALESCE(u.name, 'Unknown') AS cashierName
        FROM sales s
        LEFT JOIN users u ON u.id = s.user_id
@@ -485,6 +919,8 @@ app.get('/api/sales', async (req, res) => {
       ...row,
       total: Number(row.total) || 0,
       tax: Number(row.tax) || 0,
+      tax_rate: Number(row.tax_rate) || 0,
+      profit: Number(row.profit) || 0,
       items_count: Number(row.items_count) || 0,
       items: itemsBySaleId.get(row.id) || []
     })));
@@ -498,7 +934,7 @@ app.patch('/api/products/:id', async (req, res) => {
   try {
     const productId = Number(req.params.id);
     const [rows] = await pool.query(
-      'SELECT id, name, sku, barcode, hscode, price, stock, unit, category, created_at FROM products WHERE id = ? LIMIT 1',
+      'SELECT id, name, sku, barcode, hscode, price, cost_price, stock, unit, category, created_at FROM products WHERE id = ? LIMIT 1',
       [productId]
     );
     const current = rows[0];
@@ -510,6 +946,7 @@ app.patch('/api/products/:id', async (req, res) => {
     const next = {
       name: req.body.name ?? current.name,
       price: req.body.price ?? current.price,
+      cost_price: req.body.costPrice ?? current.cost_price,
       category: req.body.category ?? current.category,
       unit: req.body.unit ?? current.unit,
       stock: req.body.stock ?? current.stock,
@@ -524,13 +961,13 @@ app.patch('/api/products/:id', async (req, res) => {
 
     await pool.query(
       `UPDATE products
-       SET name = ?, price = ?, category = ?, unit = ?, stock = ?, barcode = ?, hscode = ?, sku = ?
+       SET name = ?, price = ?, cost_price = ?, category = ?, unit = ?, stock = ?, barcode = ?, hscode = ?, sku = ?
        WHERE id = ?`,
-      [next.name, next.price, next.category, next.unit, Number(next.stock) || 0, next.barcode, next.hscode, next.sku, productId]
+      [next.name, next.price, Number(next.cost_price) || 0, next.category, next.unit, Number(next.stock) || 0, next.barcode, next.hscode, next.sku, productId]
     );
 
     const [updatedRows] = await pool.query(
-      'SELECT id, name, sku, barcode, hscode, price, stock, unit, category, created_at FROM products WHERE id = ? LIMIT 1',
+      'SELECT id, name, sku, barcode, hscode, price, cost_price, stock, unit, category, created_at FROM products WHERE id = ? LIMIT 1',
       [productId]
     );
     await logAudit('product.update', 'api', { productId, fields: Object.keys(req.body || {}) });
@@ -741,6 +1178,33 @@ app.get('/api/reports', async (req, res) => {
         eventType: r.event_type,
         details: typeof r.details_json === 'string' ? r.details_json : JSON.stringify(r.details_json)
       }));
+    } else if (type === 'end-of-day-profit') {
+      columns = ['Date', 'Currency', 'Sales Total', 'Profit'];
+      columnMap = { Date: 'date', Currency: 'currency', 'Sales Total': 'salesTotal', Profit: 'profit' };
+
+      const reportDate = endDate || startDate || new Date().toISOString().slice(0, 10);
+
+      const [usd] = await pool.query(
+        `SELECT COALESCE(SUM(total), 0) AS salesTotal, COALESCE(SUM(profit), 0) AS profit
+         FROM sales_usd WHERE DATE(created_at) = ?`,
+        [reportDate]
+      );
+      const [zar] = await pool.query(
+        `SELECT COALESCE(SUM(total), 0) AS salesTotal, COALESCE(SUM(profit), 0) AS profit
+         FROM sales_zar WHERE DATE(created_at) = ?`,
+        [reportDate]
+      );
+      const [zig] = await pool.query(
+        `SELECT COALESCE(SUM(total), 0) AS salesTotal, COALESCE(SUM(profit), 0) AS profit
+         FROM sales_zig WHERE DATE(created_at) = ?`,
+        [reportDate]
+      );
+
+      rows = [
+        { date: reportDate, currency: 'USD', salesTotal: Number(usd[0]?.salesTotal) || 0, profit: Number(usd[0]?.profit) || 0 },
+        { date: reportDate, currency: 'ZAR', salesTotal: Number(zar[0]?.salesTotal) || 0, profit: Number(zar[0]?.profit) || 0 },
+        { date: reportDate, currency: 'ZIG', salesTotal: Number(zig[0]?.salesTotal) || 0, profit: Number(zig[0]?.profit) || 0 }
+      ];
     } else {
       return res.status(400).json({ error: 'Unsupported report type.' });
     }
@@ -757,6 +1221,79 @@ app.get('/api/reports', async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ error: 'Failed to generate report.' });
+  }
+});
+
+app.get('/api/dashboard/profit', async (req, res) => {
+  try {
+    const reportDate = toIsoDate(req.query.date) || new Date().toISOString().slice(0, 10);
+
+    const [summaryRows] = await pool.query(
+      `SELECT COALESCE(SUM(total), 0) AS totalSales,
+              COALESCE(SUM(profit), 0) AS totalProfit,
+              COUNT(*) AS transactions
+       FROM transactions
+       WHERE DATE(created_at) = ?`,
+      [reportDate]
+    );
+
+    const [byCurrencyRows] = await pool.query(
+      `SELECT currency_code AS currency,
+              COALESCE(SUM(total), 0) AS salesTotal,
+              COALESCE(SUM(profit), 0) AS profit,
+              COUNT(*) AS transactions
+       FROM transactions
+       WHERE DATE(created_at) = ?
+       GROUP BY currency_code
+       ORDER BY currency_code ASC`,
+      [reportDate]
+    );
+
+    const [byCashierRows] = await pool.query(
+      `SELECT COALESCE(u.name, 'Unknown') AS cashierName,
+              COALESCE(SUM(t.total), 0) AS salesTotal,
+              COALESCE(SUM(t.profit), 0) AS profit,
+              COUNT(*) AS transactions
+       FROM transactions t
+       LEFT JOIN users u ON u.id = t.user_id
+       WHERE DATE(t.created_at) = ?
+       GROUP BY COALESCE(u.name, 'Unknown')
+       ORDER BY profit DESC`,
+      [reportDate]
+    );
+
+    const [lastAuditRows] = await pool.query(
+      `SELECT created_at
+       FROM audit_logs
+       ORDER BY created_at DESC
+       LIMIT 1`
+    );
+
+    await logAudit('dashboard.profit.view', 'admin', { date: reportDate });
+
+    res.json({
+      date: reportDate,
+      summary: {
+        totalSales: Number(summaryRows[0]?.totalSales) || 0,
+        totalProfit: Number(summaryRows[0]?.totalProfit) || 0,
+        transactions: Number(summaryRows[0]?.transactions) || 0,
+        lastAuditAt: lastAuditRows[0]?.created_at ? new Date(lastAuditRows[0].created_at).toLocaleString() : null
+      },
+      byCurrency: (byCurrencyRows || []).map(row => ({
+        currency: row.currency,
+        salesTotal: Number(row.salesTotal) || 0,
+        profit: Number(row.profit) || 0,
+        transactions: Number(row.transactions) || 0
+      })),
+      byCashier: (byCashierRows || []).map(row => ({
+        cashierName: row.cashierName,
+        salesTotal: Number(row.salesTotal) || 0,
+        profit: Number(row.profit) || 0,
+        transactions: Number(row.transactions) || 0
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to load profit dashboard.' });
   }
 });
 

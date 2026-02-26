@@ -1,5 +1,5 @@
 const POSModule = {
-  TAX_RATE: 0.10,
+  DEFAULT_TAX_RATE: 0.10,
   cart: [],
   products: [],
   currentReceiptHtml: null,
@@ -146,6 +146,7 @@ const POSModule = {
     });
   },
 
+
   updateDateTime() {
     const now = new Date();
     const dateOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
@@ -167,6 +168,14 @@ const POSModule = {
       currencyCode: localStorage.getItem('pos.currencyCode') || 'USD',
       currencySymbol: localStorage.getItem('pos.currencySymbol') || '$'
     };
+  },
+
+  getTaxRate() {
+    const percent = Number(localStorage.getItem('pos.taxRatePercent') || '10');
+    if (!Number.isFinite(percent) || percent < 0) {
+      return this.DEFAULT_TAX_RATE;
+    }
+    return percent / 100;
   },
 
   formatMoney(amount) {
@@ -305,7 +314,7 @@ const POSModule = {
 
   updateSummary() {
     const subtotal = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const tax = subtotal * this.TAX_RATE;
+    const tax = subtotal * this.getTaxRate();
     const total = subtotal + tax;
 
     document.getElementById('subtotal').textContent = this.formatMoney(subtotal);
@@ -375,7 +384,7 @@ const POSModule = {
       alert('Cart is empty!');
       return;
     }
-    const total = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) * (1 + this.TAX_RATE);
+    const total = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) * (1 + this.getTaxRate());
     document.getElementById('modalTotalDue').textContent = this.formatMoney(total);
     
     const modalCartItems = document.getElementById('modalCartItems');
@@ -401,7 +410,7 @@ const POSModule = {
   },
 
   calculateChange(amountTendered) {
-    const total = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) * (1 + this.TAX_RATE);
+    const total = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) * (1 + this.getTaxRate());
     const tendered = parseFloat(amountTendered) || 0;
     const change = tendered - total;
     
@@ -540,7 +549,57 @@ const POSModule = {
       statusEl.className = 'notification-status show error';
     }
   },
+  // ...existing code...
+  escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (m) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    }[m]));
+  },
 
+  async getZimraConfig() {
+    if (this.zimraConfig) return this.zimraConfig;
+
+    const fallback = {
+      baseUrl: 'https://fdms.zimra.co.zw',
+      deviceId: 'EDIT_ME_DEVICE_ID',
+      taxPayerTin: 'EDIT_ME_TIN',
+      branchCode: 'EDIT_ME_BRANCH',
+      qrSize: 180,
+      enabled: true
+    };
+
+    try {
+      const res = await fetch('/config/zimra-services.json', { cache: 'no-store' });
+      if (!res.ok) throw new Error('Failed to load ZIMRA config');
+      this.zimraConfig = { ...fallback, ...(await res.json()) };
+      return this.zimraConfig;
+    } catch (err) {
+      console.warn('Using fallback ZIMRA config:', err.message);
+      this.zimraConfig = fallback;
+      return this.zimraConfig;
+    }
+  },
+
+  buildZimraQrPayload(saleId) {
+    const z = this.zimraConfig || {};
+    const params = new URLSearchParams({
+      tin: z.taxPayerTin || '',
+      deviceId: z.deviceId || '',
+      branch: z.branchCode || '',
+      receiptNo: String(saleId)
+    });
+    return `${z.baseUrl || 'https://fdms.zimra.co.zw'}?${params.toString()}`;
+  },
+
+  buildQrImageUrl(payload, size = 180) {
+    // External QR image generator (no npm package needed in browser)
+    return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(payload)}`;
+  },
+// ...existing code...
   buildReceiptHtml(saleId, paymentMethod, totals) {
     return `
       <html>
@@ -572,6 +631,7 @@ const POSModule = {
         <table>
           <thead>
             <tr>
+              <th>Hscode</th>
               <th>Item</th>
               <th class="item-price">Price</th>
               <th class="item-qty">Qty</th>
@@ -689,7 +749,8 @@ const POSModule = {
 
   async completeSale() {
     const selectedMethod = document.querySelector('input[name="paymentMethod"]:checked').value;
-    const total = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) * (1 + this.TAX_RATE);
+    const taxRate = this.getTaxRate();
+    const total = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) * (1 + taxRate);
 
     await this.loadProducts();
 
@@ -715,8 +776,9 @@ const POSModule = {
     }
 
     const subtotal = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const tax = subtotal * this.TAX_RATE;
+    const tax = subtotal * taxRate;
     const user = Auth.getUser();
+    const { currencyCode } = this.getCurrencySettings();
 
     try {
       const result = await API.completeSale({
@@ -725,7 +787,9 @@ const POSModule = {
         tax: tax,
         total: total,
         userId: user.id,
-        paymentMethod: selectedMethod
+        paymentMethod: selectedMethod,
+        currencyCode,
+        taxRate
       });
 
       await this.loadProducts();

@@ -60,6 +60,10 @@ const API = {
     return this.request(`/user/${id}`);
   },
 
+  getUsers() {
+    return this.request('/users');
+  },
+
   // Products
   getProducts() {
     return this.request('/products');
@@ -76,6 +80,13 @@ const API = {
     return this.request(`/products/${productId}/stock`, {
       method: 'PATCH',
       body: JSON.stringify({ quantity })
+    });
+  },
+
+  adjustStock(payload) {
+    return this.request('/stock/adjust', {
+      method: 'POST',
+      body: JSON.stringify(payload)
     });
   },
 
@@ -123,5 +134,39 @@ const API = {
       method: 'POST',
       body: JSON.stringify(payload)
     });
+  },
+
+  getProfitDashboard(date) {
+    const query = new URLSearchParams({ date: date || '' }).toString();
+    return this.request(`/dashboard/profit?${query}`);
+  },
+
+  // Admin connection settings
+  getConnectionSettings() {
+    return this.request('/admin/connection-settings');
+  },
+
+  updateConnectionSettings(payload) {
+    return this.request('/admin/connection-settings', {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  testConnectionSettings(payload) {
+    return this.request('/admin/connection-settings/test', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  restartServer() {
+    return this.request('/admin/restart', {
+      method: 'POST'
+    });
+  },
+
+  checkServerHealth() {
+    return this.request('/health');
   }
 };
