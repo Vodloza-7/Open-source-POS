@@ -833,6 +833,26 @@ body {
   width: 100%;
 }
 
+.report-form select,
+.report-form input {
+  width: 100%;
+}
+
+.report-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.report-preview h4 {
+  margin: 0;
+  color: #0f172a;
+}
+
+.report-table-wrapper {
+  overflow-x: auto;
+}
+
 @keyframes adminFadeIn {
   from {
     opacity: 0;

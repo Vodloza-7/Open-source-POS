@@ -1,8 +1,11 @@
 const AdminModule = {
+  currentReportData: null,
+
   async init() {
     this.setupEventListeners();
     this.setupNavigation();
     this.loadSystemSettings();
+    this.setDefaultReportDates();
   },
 
   setupEventListeners() {
@@ -33,6 +36,18 @@ const AdminModule = {
 
     document.getElementById('resetSystemSettingsBtn')?.addEventListener('click', () => {
       this.resetSystemSettings();
+    });
+
+    document.getElementById('reportForm')?.addEventListener('submit', (e) => {
+      this.handleReportPreview(e);
+    });
+
+    document.getElementById('downloadReportPdfBtn')?.addEventListener('click', () => {
+      this.downloadReportPdf();
+    });
+
+    document.getElementById('emailReportBtn')?.addEventListener('click', () => {
+      this.sendReportByEmail();
     });
   },
 
@@ -139,6 +154,191 @@ const AdminModule = {
     if (statusEl) {
       statusEl.textContent = 'System settings reset to defaults.';
       statusEl.className = 'status-message loading';
+    }
+  },
+
+  setDefaultReportDates() {
+    const endInput = document.getElementById('reportEndDate');
+    const startInput = document.getElementById('reportStartDate');
+    if (!endInput || !startInput) return;
+
+    const now = new Date();
+    const end = now.toISOString().slice(0, 10);
+
+    const startDate = new Date(now);
+    startDate.setDate(startDate.getDate() - 30);
+    const start = startDate.toISOString().slice(0, 10);
+
+    if (!endInput.value) endInput.value = end;
+    if (!startInput.value) startInput.value = start;
+  },
+
+  getReportFormValues() {
+    return {
+      type: document.getElementById('reportType')?.value || 'sales-by-cashier',
+      startDate: document.getElementById('reportStartDate')?.value || '',
+      endDate: document.getElementById('reportEndDate')?.value || '',
+      email: document.getElementById('reportEmail')?.value?.trim() || ''
+    };
+  },
+
+  formatMoney(amount) {
+    const currencySymbol = localStorage.getItem('pos.currencySymbol') || '$';
+    return `${currencySymbol}${(Number(amount) || 0).toFixed(2)}`;
+  },
+
+  setReportStatus(message, type = 'loading') {
+    const statusEl = document.getElementById('reportStatus');
+    if (!statusEl) return;
+    statusEl.textContent = message;
+    statusEl.className = `status-message ${type}`;
+  },
+
+  async handleReportPreview(e) {
+    e.preventDefault();
+    this.setReportStatus('Generating report preview...', 'loading');
+
+    const params = this.getReportFormValues();
+    try {
+      const report = await API.getReport(params);
+      this.currentReportData = report;
+      this.renderReportPreview(report);
+      this.setReportStatus('Report preview generated.', 'success');
+    } catch (error) {
+      this.setReportStatus(`Error: ${error.message}`, 'error');
+    }
+  },
+
+  getReportTitle(type) {
+    if (type === 'sales-by-cashier') return 'Sales Report by Cashier';
+    if (type === 'audit-trail') return 'Audit Trail Log';
+    if (type === 'cash-sales') return 'Cash Sales Report';
+    return 'POS Report';
+  },
+
+  renderReportPreview(report) {
+    const container = document.getElementById('reportPreview');
+    if (!container) return;
+
+    const title = this.getReportTitle(report.type);
+    const generatedAt = new Date(report.generatedAt).toLocaleString();
+
+    if (!report.rows || report.rows.length === 0) {
+      container.innerHTML = `<div class="report-preview"><h4>${title}</h4><p>No data for selected range.</p><p>Generated: ${generatedAt}</p></div>`;
+      return;
+    }
+
+    const headerRow = report.columns.map(col => `<th>${col}</th>`).join('');
+    const bodyRows = report.rows.map(row => {
+      const tds = report.columns.map(col => {
+        const key = report.columnMap[col];
+        let val = row[key] ?? '';
+        if (typeof val === 'number' && (key === 'totalSales' || key === 'total' || key === 'amount')) {
+          val = this.formatMoney(val);
+        }
+        return `<td>${val}</td>`;
+      }).join('');
+      return `<tr>${tds}</tr>`;
+    }).join('');
+
+    container.innerHTML = `
+      <div class="report-preview">
+        <h4>${title}</h4>
+        <p>From ${report.range.startDate || '-'} to ${report.range.endDate || '-'}</p>
+        <div class="report-table-wrapper">
+          <table class="sales-table">
+            <thead><tr>${headerRow}</tr></thead>
+            <tbody>${bodyRows}</tbody>
+          </table>
+        </div>
+        <p>Generated: ${generatedAt}</p>
+      </div>
+    `;
+  },
+
+  buildReportPrintHtml(report) {
+    const title = this.getReportTitle(report.type);
+    const generatedAt = new Date(report.generatedAt).toLocaleString();
+    const headerRow = report.columns.map(col => `<th>${col}</th>`).join('');
+    const bodyRows = (report.rows || []).map(row => {
+      const tds = report.columns.map(col => {
+        const key = report.columnMap[col];
+        let val = row[key] ?? '';
+        if (typeof val === 'number' && (key === 'totalSales' || key === 'total' || key === 'amount')) {
+          val = this.formatMoney(val);
+        }
+        return `<td>${val}</td>`;
+      }).join('');
+      return `<tr>${tds}</tr>`;
+    }).join('');
+
+    return `
+      <html>
+      <head>
+        <title>${title}</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 24px; color: #111; }
+          h2 { margin-bottom: 8px; }
+          .meta { color: #555; margin-bottom: 12px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+          th, td { border: 1px solid #ccc; padding: 8px; font-size: 12px; text-align: left; }
+          th { background: #f2f2f2; }
+        </style>
+      </head>
+      <body>
+        <h2>${title}</h2>
+        <div class="meta">Range: ${report.range.startDate || '-'} to ${report.range.endDate || '-'}</div>
+        <div class="meta">Generated: ${generatedAt}</div>
+        <table>
+          <thead><tr>${headerRow}</tr></thead>
+          <tbody>${bodyRows || '<tr><td colspan="99">No data</td></tr>'}</tbody>
+        </table>
+      </body>
+      </html>
+    `;
+  },
+
+  downloadReportPdf() {
+    if (!this.currentReportData) {
+      this.setReportStatus('Please preview a report first.', 'error');
+      return;
+    }
+
+    const html = this.buildReportPrintHtml(this.currentReportData);
+    const win = window.open('', '_blank', 'width=980,height=700');
+    if (!win) {
+      this.setReportStatus('Popup blocked. Allow popups to download PDF.', 'error');
+      return;
+    }
+
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    win.print();
+    this.setReportStatus('Print dialog opened. Choose "Save as PDF".', 'success');
+  },
+
+  async sendReportByEmail() {
+    if (!this.currentReportData) {
+      this.setReportStatus('Please preview a report first.', 'error');
+      return;
+    }
+
+    const { email } = this.getReportFormValues();
+    if (!email) {
+      this.setReportStatus('Enter an email address first.', 'error');
+      return;
+    }
+
+    this.setReportStatus('Sending report email...', 'loading');
+    try {
+      await API.sendReportEmail({
+        email,
+        report: this.currentReportData
+      });
+      this.setReportStatus('Report email sent successfully.', 'success');
+    } catch (error) {
+      this.setReportStatus(`Error: ${error.message}`, 'error');
     }
   }
 };

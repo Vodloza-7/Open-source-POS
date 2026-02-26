@@ -478,5 +478,23 @@
       }
     ],
     "created_at": "2026-02-05T14:10:11.335Z"
+  },
+  {
+    "id": 24,
+    "userId": 1,
+    "total": 5.5,
+    "tax": 0.5,
+    "items_count": 1,
+    "items": [
+      {
+        "id": 5,
+        "name": "Bread",
+        "price": 2.5,
+        "quantity": 2,
+        "barcode": "100000000005",
+        "hscode": "1905.90"
+      }
+    ],
+    "created_at": "2026-02-23T14:28:20.293Z"
   }
 ]

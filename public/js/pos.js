@@ -196,10 +196,28 @@ const POSModule = {
   },
 
   filterProducts(searchTerm) {
-    const lowerCaseTerm = searchTerm.toLowerCase();
-    const filtered = this.products.filter(product => 
-      product.name.toLowerCase().includes(lowerCaseTerm)
-    );
+    const term = String(searchTerm || '').trim().toLowerCase();
+    if (!term) {
+      this.displayProducts(this.products);
+      return;
+    }
+
+    const filtered = this.products.filter(product => {
+      const name = String(product.name || '').toLowerCase();
+      const barcode = String(product.barcode || '').toLowerCase();
+      const hscode = String(product.hscode || '').toLowerCase();
+      const sku = String(product.sku || '').toLowerCase();
+      const productId = String(product.id || '').toLowerCase();
+
+      return (
+        name.includes(term) ||
+        barcode.includes(term) ||
+        hscode.includes(term) ||
+        sku.includes(term) ||
+        productId === term
+      );
+    });
+
     this.displayProducts(filtered);
   },
 

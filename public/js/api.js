@@ -110,5 +110,18 @@ const API = {
       method: 'POST',
       body: JSON.stringify(data)
     });
+  },
+
+  // Reports
+  getReport(params) {
+    const query = new URLSearchParams(params || {}).toString();
+    return this.request(`/reports?${query}`);
+  },
+
+  sendReportEmail(payload) {
+    return this.request('/reports/email', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
   }
 };

@@ -1,0 +1,24 @@
+services:
+  npm:
+    image: node:20-bookworm
+    working_dir: /app
+    volumes:
+      - ./:/app
+      - node_modules:/app/node_modules
+      - npm_cache:/root/.npm
+    command: tail -f /dev/null
+
+  app:
+    image: node:20-bookworm
+    working_dir: /app
+    volumes:
+      - ./:/app
+      - node_modules:/app/node_modules
+      - npm_cache:/root/.npm
+    ports:
+      - "3000:3000"
+    command: npm run dev
+
+volumes:
+  node_modules:
+  npm_cache:
