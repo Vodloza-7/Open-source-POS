@@ -4,15 +4,109 @@ const POSModule = {
   products: [],
   currentReceiptHtml: null,
   config: null,
+  exchangeRates: null,
+  exchangeRatesRefreshTimer: null,
 
   async init() {
     this.config = this.getConfig();
     this.setupEventListeners();
     this.updateUserDisplay();
     this.applyRolePermissions();
+    await this.loadExchangeRates();
+    this.startExchangeRatesRefresh();
     this.updateDateTime();
     await this.loadProducts();
     setInterval(() => this.updateDateTime(), 1000);
+  },
+
+  normalizeExchangeRates(data) {
+    const rates = {
+      USD: Number(data?.rates?.USD) || 1,
+      ZAR: Number(data?.rates?.ZAR) || 20,
+      ZIG: Number(data?.rates?.ZIG) || 400
+    };
+
+    return {
+      baseCurrency: String(data?.baseCurrency || 'USD').toUpperCase(),
+      rates,
+      updatedAt: data?.updatedAt || null
+    };
+  },
+
+  applyCurrentCurrencyRateFromExchange() {
+    const exchange = this.exchangeRates;
+    if (!exchange || !exchange.rates) return;
+
+    const currentCode = String(localStorage.getItem('pos.currencyCode') || exchange.baseCurrency || 'USD').toUpperCase();
+    const currentRate = Number(exchange.rates[currentCode]);
+    const baseRate = Number(exchange.rates.USD) || 1;
+    const relativeRate = (Number.isFinite(currentRate) && currentRate > 0 ? currentRate : baseRate) / baseRate;
+
+    localStorage.setItem('pos.currencyCode', currentCode);
+    localStorage.setItem('pos.currencyRate', String(relativeRate));
+
+    if (currentCode === 'USD') localStorage.setItem('pos.currencySymbol', '$');
+    if (currentCode === 'ZAR') localStorage.setItem('pos.currencySymbol', 'R');
+    if (currentCode === 'ZIG') localStorage.setItem('pos.currencySymbol', 'ZiG ');
+  },
+
+  renderExchangeRatesPanel() {
+    const content = document.getElementById('posExchangeRatesContent');
+    if (!content) return;
+
+    const exchange = this.exchangeRates;
+    if (!exchange || !exchange.rates) {
+      content.textContent = 'Exchange rates unavailable.';
+      return;
+    }
+
+    const currentCurrency = String(localStorage.getItem('pos.currencyCode') || 'USD').toUpperCase();
+    const lines = ['USD', 'ZAR', 'ZIG'].map(code => {
+      const value = Number(exchange.rates[code]) || 0;
+      const selected = code === currentCurrency ? ' (Selected)' : '';
+      return `<div class="exchange-rate-line"><span>1 USD → ${code}${selected}</span><strong>${value.toFixed(4)}</strong></div>`;
+    }).join('');
+
+    const updatedText = exchange.updatedAt ? new Date(exchange.updatedAt).toLocaleString() : '-';
+    content.innerHTML = `${lines}<div class="exchange-rate-time">Updated: ${updatedText}</div>`;
+  },
+
+  async loadExchangeRates() {
+    const content = document.getElementById('posExchangeRatesContent');
+    if (content && !this.exchangeRates) {
+      content.textContent = 'Loading exchange rates...';
+    }
+
+    try {
+      const data = typeof API.getCurrentExchangeRates === 'function'
+        ? await API.getCurrentExchangeRates()
+        : await API.getExchangeSettings();
+      this.exchangeRates = this.normalizeExchangeRates(data);
+      this.applyCurrentCurrencyRateFromExchange();
+      this.updateSummary();
+      this.renderExchangeRatesPanel();
+      return this.exchangeRates;
+    } catch (error) {
+      if (!this.exchangeRates) {
+        this.exchangeRates = this.normalizeExchangeRates({
+          baseCurrency: 'USD',
+          rates: { USD: 1, ZAR: 20, ZIG: 400 },
+          updatedAt: null
+        });
+      }
+      this.renderExchangeRatesPanel();
+      return this.exchangeRates;
+    }
+  },
+
+  startExchangeRatesRefresh() {
+    if (this.exchangeRatesRefreshTimer) {
+      clearInterval(this.exchangeRatesRefreshTimer);
+    }
+
+    this.exchangeRatesRefreshTimer = setInterval(() => {
+      this.loadExchangeRates();
+    }, 30000);
   },
 
   getConfig() {
@@ -73,7 +167,7 @@ const POSModule = {
     });
 
     document.getElementById('checkoutBtn')?.addEventListener('click', () => {
-      this.openPaymentModal();
+      this.openCheckoutWithCurrency();
     });
 
     document.getElementById('cancelPaymentBtn')?.addEventListener('click', () => {
@@ -94,6 +188,21 @@ const POSModule = {
 
     document.getElementById('manageProductsInlineBtn')?.addEventListener('click', () => {
       Router.navigate('products');
+    });
+
+    document.getElementById('refreshExchangeRatesBtn')?.addEventListener('click', async () => {
+      const refreshButton = document.getElementById('refreshExchangeRatesBtn');
+      if (refreshButton) {
+        refreshButton.disabled = true;
+        refreshButton.textContent = 'Refreshing...';
+      }
+
+      await this.loadExchangeRates();
+
+      if (refreshButton) {
+        refreshButton.disabled = false;
+        refreshButton.textContent = 'Refresh Rates Now';
+      }
     });
 
     // Payment method selection
@@ -144,6 +253,20 @@ const POSModule = {
     document.querySelectorAll('.admin-only').forEach(el => {
       el.style.display = isAdmin ? 'inline-block' : 'none';
     });
+
+    const canTransact = Auth.hasPermission('customer_transactions');
+    const checkoutBtn = document.getElementById('checkoutBtn');
+    const confirmPaymentBtn = document.getElementById('confirmPaymentBtn');
+
+    if (checkoutBtn) {
+      checkoutBtn.disabled = !canTransact;
+      checkoutBtn.title = canTransact ? '' : 'You do not have permission for customer transactions.';
+    }
+
+    if (confirmPaymentBtn) {
+      confirmPaymentBtn.disabled = !canTransact;
+      confirmPaymentBtn.title = canTransact ? '' : 'You do not have permission for customer transactions.';
+    }
   },
 
 
@@ -166,10 +289,52 @@ const POSModule = {
   getCurrencySettings() {
     return {
       currencyCode: localStorage.getItem('pos.currencyCode') || 'USD',
-      currencySymbol: localStorage.getItem('pos.currencySymbol') || '$'
+      currencySymbol: localStorage.getItem('pos.currencySymbol') || '$',
+      currencyRate: Number(localStorage.getItem('pos.currencyRate') || '1') || 1
     };
   },
+  convertFromBase(amount) {
+  const { currencyRate } = this.getCurrencySettings();
+  const value = Number(amount) || 0;
+  return value * currencyRate;
+  },
+  formatMoney(amount) {
+    const { currencySymbol } = this.getCurrencySettings();
+    const converted = this.convertFromBase(amount);
+    return `${currencySymbol}${converted.toFixed(2)}`;
+  },
+  openCheckoutWithCurrency() {
+  if (!Auth.hasPermission('customer_transactions')) {
+    alert('You are not allowed to process customer transactions. Contact administrator.');
+    return;
+  }
 
+  if (this.cart.length === 0) {
+    alert('Cart is empty!');
+    return;
+  }
+  const subtotal = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const totalUSD = subtotal * (1 + this.getTaxRate());
+
+  if (typeof window.openMultiCurrencyPicker === 'function') {
+    this.loadExchangeRates().then((fxData) => {
+      window.openMultiCurrencyPicker({
+        amount: totalUSD,
+        fromCurrency: 'USD',
+        fxData,
+        onSelect: () => {
+          this.renderExchangeRatesPanel();
+          this.updateSummary();
+          this.openPaymentModal();
+        }
+      });
+    });
+    return;
+  }
+
+  // fallback
+  this.openPaymentModal();
+},
   getTaxRate() {
     const percent = Number(localStorage.getItem('pos.taxRatePercent') || '10');
     if (!Number.isFinite(percent) || percent < 0) {
@@ -177,11 +342,32 @@ const POSModule = {
     }
     return percent / 100;
   },
+  // ...existing code...
+getItemTaxRate(item) {
+  if (item?.taxExempt) return 0;
+  if (Number.isFinite(Number(item?.taxRatePercent))) {
+    return Number(item.taxRatePercent) / 100;
+  }
+  return this.getTaxRate();
+},
 
+calculateCartTotalsBase() {
+  let subtotal = 0;
+  let tax = 0;
+
+  for (const item of this.cart) {
+    const line = (Number(item.price) || 0) * (Number(item.quantity) || 0);
+    subtotal += line;
+    tax += line * this.getItemTaxRate(item);
+  }
+
+  return { subtotal, tax, total: subtotal + tax };
+},
+// ...existing code... 
   formatMoney(amount) {
     const { currencySymbol } = this.getCurrencySettings();
-    const value = Number(amount) || 0;
-    return `${currencySymbol}${value.toFixed(2)}`;
+    const converted = this.convertFromBase(amount);
+    return `${currencySymbol}${converted.toFixed(2)}`;
   },
 
   async loadProducts() {
@@ -612,13 +798,13 @@ const POSModule = {
           .meta { text-align: center; font-size: 11px; color: #444; margin-bottom: 8px; }
           .divider { border-top: 1px dashed #999; margin: 8px 0; }
           table { width: 100%; border-collapse: collapse; }
-          th { text-align: left; font-size: 11px; padding-bottom: 4px; }
-          td { font-size: 11px; padding: 4px 0; vertical-align: top; }
-          .item-name { width: 52%; }
-          .item-price { width: 16%; text-align: right; }
-          .item-qty { width: 12%; text-align: right; }
-          .item-total { width: 20%; text-align: right; }
-          .item-meta { font-size: 10px; color: #555; margin-top: 2px; }
+          th, td { font-size: 11px; padding: 4px 0; border-bottom: 1px dotted #ddd; }
+          th { text-align: left; padding-bottom: 6px; }
+          .col-code { width: 16%; text-align: left; }
+          .col-item { width: 30%; text-align: left; }
+          .col-price { width: 18%; text-align: right; }
+          .col-qty { width: 12%; text-align: right; }
+          .col-total { width: 24%; text-align: right; }
           .receipt-line { display: flex; justify-content: space-between; margin: 3px 0; font-size: 11px; }
           .total { font-weight: bold; margin-top: 6px; }
           .footer { text-align: center; font-size: 10px; color: #666; margin-top: 8px; }
@@ -631,23 +817,21 @@ const POSModule = {
         <table>
           <thead>
             <tr>
-              <th>Hscode</th>
-              <th>Item</th>
-              <th class="item-price">Price</th>
-              <th class="item-qty">Qty</th>
-              <th class="item-total">Total</th>
+              <th class="col-code">Code</th>
+              <th class="col-item">Item Name</th>
+              <th class="col-price">Price</th>
+              <th class="col-qty">Qty</th>
+              <th class="col-total">Total</th>
             </tr>
           </thead>
           <tbody>
             ${this.cart.map(item => `
               <tr class="item-row">
-                <td class="item-name">
-                  <div>${item.name}</div>
-                  <div class="item-meta">HS: ${item.hscode || '-'}</div>
-                </td>
-                <td class="item-price">${this.formatMoney(item.price)}</td>
-                <td class="item-qty">${item.quantity}</td>
-                <td class="item-total">${this.formatMoney(item.price * item.quantity)}</td>
+                <td class="col-code">${item.hscode || item.barcode || '-'}</td>
+                <td class="col-item">${item.name || '-'}</td>
+                <td class="col-price">${this.formatMoney(item.price)}</td>
+                <td class="col-qty">${item.quantity}</td>
+                <td class="col-total">${this.formatMoney(item.price * item.quantity)}</td>
               </tr>
             `).join('')}
           </tbody>

@@ -529,6 +529,50 @@ body {
   gap: 10px;
 }
 
+.pos-exchange-panel {
+  margin-top: 14px;
+  background: #f8fafc;
+  border: 1px solid #dbe4ef;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.pos-exchange-panel h3 {
+  font-size: 13px;
+  margin-bottom: 8px;
+  color: #0f172a;
+}
+
+.pos-exchange-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.pos-exchange-header h3 {
+  margin: 0;
+}
+
+.pos-exchange-content {
+  font-size: 12px;
+  color: #334155;
+  line-height: 1.6;
+}
+
+.pos-exchange-content .exchange-rate-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pos-exchange-content .exchange-rate-time {
+  margin-top: 6px;
+  color: #64748b;
+  font-size: 11px;
+}
+
 /* Products Management */
 .products-interface {
   background: rgba(255, 255, 255, 0.92);
@@ -900,6 +944,64 @@ body {
 
 .report-table-wrapper {
   overflow-x: auto;
+}
+
+.user-role-select {
+  width: 100%;
+  min-width: 150px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+}
+
+.permissions-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  gap: 8px 12px;
+  min-width: 380px;
+}
+
+.permission-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #334155;
+}
+
+.permission-check input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+}
+
+.users-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 180px;
+}
+
+.btn-sm {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.role-pill {
+  display: inline-block;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.btn-xs {
+  padding: 6px 8px;
+  font-size: 11px;
+  line-height: 1.1;
 }
 
 @keyframes adminFadeIn {

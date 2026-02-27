@@ -1,4 +1,5 @@
 window.POS_CONFIG = {
+  apiBaseUrl: '',
   barcode: {
     inputSelector: '#barcodeInput',
     submitOnEnter: true,

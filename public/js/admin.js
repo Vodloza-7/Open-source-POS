@@ -1,9 +1,20 @@
 const AdminModule = {
   currentReportData: null,
+  usersCache: [],
+  permissionCatalog: [
+    { key: 'customer_transactions', label: 'Customer Transactions' },
+    { key: 'manage_sales_orders', label: 'Manage Sales Orders' },
+    { key: 'add_users', label: 'Add Users' },
+    { key: 'delete_users', label: 'Delete Users' },
+    { key: 'alter_inventory', label: 'Alter Inventory' },
+    { key: 'manage_user_permissions', label: 'Manage User Roles & Permissions' }
+  ],
+  roleOptions: ['cashier', 'supervisor', 'manager', 'admin'],
 
   async init() {
     this.setupEventListeners();
     this.setupNavigation();
+    this.setupUserAccessActions();
     this.loadSystemSettings();
     await this.loadConnectionSettings();
     await this.loadUsersList();
@@ -11,6 +22,7 @@ const AdminModule = {
     this.setDefaultReportDates();
     this.setDefaultProfitDate();
     await this.loadProfitDashboard();
+    await this.loadExchangeSettingsPage();
   },
 
   setupEventListeners() {
@@ -100,6 +112,31 @@ const AdminModule = {
     });
   },
 
+  setupUserAccessActions() {
+    const usersContainer = document.getElementById('usersListContainer');
+    if (!usersContainer) return;
+
+    usersContainer.addEventListener('click', async (event) => {
+      const saveButton = event.target.closest('[data-action="save-access"]');
+      const deleteButton = event.target.closest('[data-action="delete-user"]');
+
+      if (saveButton) {
+        const userId = Number(saveButton.dataset.userId || 0);
+        if (userId > 0) {
+          await this.handleSaveUserAccess(userId);
+        }
+        return;
+      }
+
+      if (deleteButton) {
+        const userId = Number(deleteButton.dataset.userId || 0);
+        if (userId > 0) {
+          await this.handleDeleteUser(userId);
+        }
+      }
+    });
+  },
+
   setupNavigation() {
     const navButtons = document.querySelectorAll('.admin-nav-btn');
     const panels = document.querySelectorAll('.admin-panel');
@@ -135,13 +172,14 @@ const AdminModule = {
       name: document.getElementById('newUserName').value,
       username: document.getElementById('newUserUsername').value,
       password: document.getElementById('newUserPassword').value,
+      role: document.getElementById('newUserRole')?.value || 'cashier'
     };
 
     statusEl.textContent = 'Adding user...';
     statusEl.className = 'status-message loading';
 
     try {
-      await API.register(userData.username, userData.password, userData.name);
+      await API.register(userData.username, userData.password, userData.name, userData.role);
       statusEl.textContent = 'User added successfully!';
       statusEl.className = 'status-message success';
       document.getElementById('addUserForm').reset();
@@ -175,15 +213,54 @@ const AdminModule = {
       return;
     }
 
-    const rows = users.map(user => `
-      <tr>
-        <td>${user.id}</td>
-        <td>${user.name || '-'}</td>
-        <td>${user.username || '-'}</td>
-        <td>${user.role || '-'}</td>
-        <td>${this.formatUserDate(user.created_at)}</td>
-      </tr>
-    `).join('');
+    const currentUser = Auth.getUser();
+    const canManage = Boolean(currentUser && currentUser.role === 'admin');
+
+    const rows = users.map(user => {
+      const roleControl = canManage
+        ? `
+          <select class="user-role-select" data-user-id="${user.id}">
+            ${this.roleOptions.map(role => `
+              <option value="${role}" ${String(user.role || '') === role ? 'selected' : ''}>${this.formatRoleLabel(role)}</option>
+            `).join('')}
+          </select>
+        `
+        : `<span class="role-pill">${this.formatRoleLabel(user.role || '-')}</span>`;
+
+      const permissionChecks = this.permissionCatalog.map(permission => {
+        const checked = Array.isArray(user.permissions) && user.permissions.includes(permission.key);
+        const disabledAttr = canManage ? '' : 'disabled';
+        return `
+          <label class="permission-check">
+            <input type="checkbox" data-user-id="${user.id}" data-permission-key="${permission.key}" ${checked ? 'checked' : ''} ${disabledAttr}>
+            <span>${permission.label}</span>
+          </label>
+        `;
+      }).join('');
+
+      const actions = canManage
+        ? `
+          <div class="users-actions">
+            <button class="btn btn-primary btn-sm" type="button" data-action="save-access" data-user-id="${user.id}">Save Access</button>
+            <button class="btn btn-danger btn-sm" type="button" data-action="delete-user" data-user-id="${user.id}" ${currentUser?.id === user.id ? 'disabled' : ''}>Delete User</button>
+          </div>
+        `
+        : '<span class="role-pill">View only</span>';
+
+      return `
+        <tr>
+          <td>${user.id}</td>
+          <td>${user.name || '-'}</td>
+          <td>${user.username || '-'}</td>
+          <td>${roleControl}</td>
+          <td>
+            <div class="permissions-grid">${permissionChecks}</div>
+          </td>
+          <td>${actions}</td>
+          <td>${this.formatUserDate(user.created_at)}</td>
+        </tr>
+      `;
+    }).join('');
 
     container.innerHTML = `
       <div class="report-table-wrapper">
@@ -194,6 +271,8 @@ const AdminModule = {
               <th>Name</th>
               <th>Username</th>
               <th>Role</th>
+              <th>Permissions</th>
+              <th>Actions</th>
               <th>Created</th>
             </tr>
           </thead>
@@ -203,10 +282,97 @@ const AdminModule = {
     `;
   },
 
+  formatRoleLabel(role) {
+    const value = String(role || '').trim().toLowerCase();
+    if (!value) return '-';
+    if (value === 'admin') return 'Administrator';
+    return value.charAt(0).toUpperCase() + value.slice(1);
+  },
+
+  collectPermissionsForUser(userId) {
+    const checks = document.querySelectorAll(`input[type="checkbox"][data-user-id="${userId}"][data-permission-key]`);
+    const selected = [];
+    checks.forEach(check => {
+      if (check.checked) {
+        selected.push(check.dataset.permissionKey);
+      }
+    });
+    return selected;
+  },
+
+  async handleSaveUserAccess(userId) {
+    const currentUser = Auth.getUser();
+    if (!currentUser || currentUser.role !== 'admin') {
+      this.setUsersStatus('Only administrators can manage user access.', 'error');
+      return;
+    }
+
+    const roleSelect = document.querySelector(`select.user-role-select[data-user-id="${userId}"]`);
+    const selectedRole = roleSelect?.value || 'cashier';
+    const selectedPermissions = this.collectPermissionsForUser(userId);
+
+    this.setUsersStatus('Saving user access...', 'loading');
+    try {
+      await API.updateUserAccess(userId, {
+        actorId: currentUser.id,
+        actorRole: currentUser.role,
+        role: selectedRole,
+        permissions: selectedPermissions
+      });
+      this.setUsersStatus('User access saved.', 'success');
+      await this.loadUsersList();
+    } catch (error) {
+      this.setUsersStatus(`Error: ${error.message}`, 'error');
+    }
+  },
+
+  async handleDeleteUser(userId) {
+    const currentUser = Auth.getUser();
+    if (!currentUser || currentUser.role !== 'admin') {
+      this.setUsersStatus('Only administrators can delete users.', 'error');
+      return;
+    }
+
+    if (currentUser.id === userId) {
+      this.setUsersStatus('You cannot delete the currently logged-in administrator.', 'error');
+      return;
+    }
+
+    const target = this.usersCache.find(item => Number(item.id) === Number(userId));
+    const targetName = target?.name || target?.username || `User #${userId}`;
+    const confirmed = confirm(`Delete ${targetName}? This action cannot be undone.`);
+    if (!confirmed) return;
+
+    this.setUsersStatus('Deleting user...', 'loading');
+    try {
+      await API.deleteUser(userId, {
+        actorId: currentUser.id,
+        actorRole: currentUser.role
+      });
+      this.setUsersStatus('User deleted successfully.', 'success');
+      await this.loadUsersList();
+    } catch (error) {
+      this.setUsersStatus(`Error: ${error.message}`, 'error');
+    }
+  },
+
   async loadUsersList() {
     this.setUsersStatus('Loading users...', 'loading');
     try {
+      try {
+        const catalog = await API.getPermissionsCatalog();
+        if (Array.isArray(catalog?.permissions) && catalog.permissions.length) {
+          this.permissionCatalog = catalog.permissions;
+        }
+        if (Array.isArray(catalog?.roles) && catalog.roles.length) {
+          this.roleOptions = catalog.roles;
+        }
+      } catch (catalogError) {
+        console.warn('Permissions catalog unavailable:', catalogError.message);
+      }
+
       const users = await API.getUsers();
+      this.usersCache = Array.isArray(users) ? users : [];
       this.renderUsersList(users);
       this.setUsersStatus(`Loaded ${users.length} user(s).`, 'success');
     } catch (error) {
@@ -480,7 +646,20 @@ const AdminModule = {
       </div>
     `;
   },
-
+  async loadExchangeSettingsPage() {
+  const mount = document.getElementById('exchangeSettingsMount');
+  if (!mount) return;
+  try {
+    const res = await fetch('/pages/exchange-settings.html', { cache: 'no-store' });
+    if (!res.ok) throw new Error('Cannot load exchange settings page');
+    mount.innerHTML = await res.text();
+    if (window.ExchangeSettingsModule) {
+      await window.ExchangeSettingsModule.init(mount);
+    }
+  } catch (err) {
+    mount.innerHTML = `<div class="status-message error">${err.message}</div>`;
+  }
+},
   async loadProfitDashboard() {
     this.setProfitStatus('Loading profit dashboard...', 'loading');
     const date = document.getElementById('profitDate')?.value || new Date().toISOString().slice(0, 10);
@@ -492,10 +671,14 @@ const AdminModule = {
       if (summaryEl) {
         summaryEl.innerHTML = `
           <div class="report-preview">
-            <h4>Date: ${data.date}</h4>
+            <h4>Daily Summary (${data.date})</h4>
             <p>Total Sales: <strong>${this.formatMoney(data.summary.totalSales)}</strong></p>
             <p>Total Profit: <strong>${this.formatMoney(data.summary.totalProfit)}</strong></p>
             <p>Transactions: <strong>${data.summary.transactions}</strong></p>
+            <h4 style="margin-top:10px;">Monthly Summary (${data.monthSummary?.month || '-'})</h4>
+            <p>Total Sales: <strong>${this.formatMoney(data.monthSummary?.totalSales)}</strong></p>
+            <p>Total Profit: <strong>${this.formatMoney(data.monthSummary?.totalProfit)}</strong></p>
+            <p>Transactions: <strong>${data.monthSummary?.transactions ?? 0}</strong></p>
             <p>Last Audit Event: <strong>${data.summary.lastAuditAt || '-'}</strong></p>
           </div>
         `;
@@ -507,6 +690,13 @@ const AdminModule = {
         { key: 'profit', label: 'Profit', type: 'money' },
         { key: 'transactions', label: 'Transactions' }
       ], data.byCurrency || []);
+
+      this.renderSimpleTable('profitByPayment', [
+        { key: 'paymentMethod', label: 'Payment Method' },
+        { key: 'salesTotal', label: 'Sales Total', type: 'money' },
+        { key: 'profit', label: 'Profit', type: 'money' },
+        { key: 'transactions', label: 'Transactions' }
+      ], data.byPayment || []);
 
       this.renderSimpleTable('profitByCashier', [
         { key: 'cashierName', label: 'Cashier' },
@@ -565,6 +755,9 @@ const AdminModule = {
     if (type === 'sales-by-cashier') return 'Sales Report by Cashier';
     if (type === 'audit-trail') return 'Audit Trail Log';
     if (type === 'cash-sales') return 'Cash Sales Report';
+    if (type === 'ecocash-sales') return 'EcoCash Sales Report';
+    if (type === 'card-sales') return 'Card Sales Report';
+    if (type === 'top-ten-products') return 'Top 10 Products Report';
     if (type === 'end-of-day-profit') return 'End of Day Profit Report';
     return 'POS Report';
   },
@@ -765,6 +958,7 @@ const AdminModule = {
     win.print();
     this.setReportStatus('Print dialog opened. Choose "Save as PDF".', 'success');
   },
+ 
 
   async sendReportByEmail() {
     if (!this.currentReportData) {
@@ -789,4 +983,5 @@ const AdminModule = {
       this.setReportStatus(`Error: ${error.message}`, 'error');
     }
   }
+  
 };

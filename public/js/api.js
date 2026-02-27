@@ -1,5 +1,18 @@
+function resolveApiBaseUrl() {
+  if (window.POS_CONFIG && typeof window.POS_CONFIG.apiBaseUrl === 'string' && window.POS_CONFIG.apiBaseUrl.trim()) {
+    return window.POS_CONFIG.apiBaseUrl.trim().replace(/\/$/, '');
+  }
+
+  const { protocol, hostname, port, origin } = window.location;
+  if (port === '5500') {
+    return `${protocol}//${hostname}:3000/api`;
+  }
+
+  return `${origin}/api`;
+}
+
 const API = {
-  BASE_URL: window.location.origin + '/api',
+  BASE_URL: resolveApiBaseUrl(),
   MAX_RETRIES: 3,
   RETRY_DELAY: 1000,
 
@@ -49,10 +62,10 @@ const API = {
     });
   },
 
-  register(username, password, name) {
+  register(username, password, name, role = 'cashier') {
     return this.request('/register', {
       method: 'POST',
-      body: JSON.stringify({ username, password, name })
+      body: JSON.stringify({ username, password, name, role })
     });
   },
 
@@ -62,6 +75,24 @@ const API = {
 
   getUsers() {
     return this.request('/users');
+  },
+
+  getPermissionsCatalog() {
+    return this.request('/permissions/catalog');
+  },
+
+  updateUserAccess(userId, payload) {
+    return this.request(`/users/${userId}/access`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  deleteUser(userId, payload) {
+    return this.request(`/users/${userId}`, {
+      method: 'DELETE',
+      body: JSON.stringify(payload || {})
+    });
   },
 
   // Products
@@ -135,11 +166,39 @@ const API = {
       body: JSON.stringify(payload)
     });
   },
+   getExchangeSettings() {
+    return this.request('/admin/exchange-settings');
+   },
+
+  getCurrentExchangeRates() {
+    const query = new URLSearchParams({ t: String(Date.now()) }).toString();
+    return this.request(`/exchange-rates/current?${query}`);
+  },
+
+saveExchangeSettings(payload) {
+    return this.request('/admin/exchange-settings', {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  });
+},
 
   getProfitDashboard(date) {
     const query = new URLSearchParams({ date: date || '' }).toString();
     return this.request(`/dashboard/profit?${query}`);
   },
+  //exchange settings
+  getFinanceSettings() {
+    return this.request('/admin/finance-settings');
+  },
+
+  saveFinanceSettings(payload) {
+    return this.request('/admin/finance-settings', {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+  });
+  
+},
+
 
   // Admin connection settings
   getConnectionSettings() {

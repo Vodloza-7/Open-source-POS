@@ -1,0 +1,48 @@
+<div class="panel-header">
+  <div>
+    <h2>Exchange Rates & Tax Rules</h2>
+    <p>Manage currency rates, default tax, and product tax exemption behavior.</p>
+  </div>
+</div>
+
+<div class="panel-frame">
+  <form id="exchangeSettingsForm" class="system-settings-form">
+    <h3>Currency Exchange Rates</h3>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="baseCurrencyCode">Base Currency</label>
+        <select id="baseCurrencyCode" required>
+          <option value="USD">USD</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="usdToZarRate">1 USD = Rand</label>
+        <input type="number" id="usdToZarRate" min="0.0001" step="0.0001" required>
+      </div>
+      <div class="form-group">
+        <label for="usdToZigRate">1 USD = ZiG</label>
+        <input type="number" id="usdToZigRate" min="0.0001" step="0.0001" required>
+      </div>
+    </div>
+
+    <h3>Tax Settings</h3>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="defaultTaxRatePercent">Default Tax Rate (%)</label>
+        <input type="number" id="defaultTaxRatePercent" min="0" max="100" step="0.01" required>
+      </div>
+      <div class="form-group">
+        <label for="allowTaxExemptProducts">Allow Product Tax Exemption</label>
+        <select id="allowTaxExemptProducts" required>
+          <option value="true">Yes</option>
+          <option value="false">No</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="panel-actions">
+      <button type="submit" class="btn btn-primary">Save Exchange & Tax Settings</button>
+    </div>
+  </form>
+  <div id="exchangeSettingsStatus" class="status-message"></div>
+</div>

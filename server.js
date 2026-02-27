@@ -24,6 +24,103 @@ const LEGACY_USERS_FILE_PATH = path.join(__dirname, 'db', 'users.json');
 const SERVER_STARTED_AT = new Date();
 let pool;
 
+const PERMISSION_CATALOG = [
+  { key: 'customer_transactions', label: 'Customer Transactions' },
+  { key: 'manage_sales_orders', label: 'Manage Sales Orders' },
+  { key: 'add_users', label: 'Add Users' },
+  { key: 'delete_users', label: 'Delete Users' },
+  { key: 'alter_inventory', label: 'Alter Inventory' },
+  { key: 'manage_user_permissions', label: 'Manage User Roles & Permissions' }
+];
+
+const ROLE_DEFAULT_PERMISSIONS = {
+  admin: PERMISSION_CATALOG.map(item => item.key),
+  manager: ['customer_transactions', 'manage_sales_orders', 'alter_inventory'],
+  supervisor: ['customer_transactions', 'manage_sales_orders'],
+  cashier: ['customer_transactions']
+};
+
+const ALLOWED_ROLES = Object.keys(ROLE_DEFAULT_PERMISSIONS);
+const ALLOWED_CURRENCIES = ['USD', 'ZAR', 'ZIG'];
+const PAYMENT_METHOD_ALIASES = {
+  cash: 'cash',
+  ecocash: 'ecocash',
+  mobile: 'ecocash',
+  card: 'card',
+  wallet: 'wallet'
+};
+
+function normalizeRole(role) {
+  const value = String(role || '').trim().toLowerCase();
+  if (ALLOWED_ROLES.includes(value)) return value;
+  return 'cashier';
+}
+
+function getDefaultPermissionsForRole(role) {
+  const normalizedRole = normalizeRole(role);
+  return [...(ROLE_DEFAULT_PERMISSIONS[normalizedRole] || ROLE_DEFAULT_PERMISSIONS.cashier)];
+}
+
+function normalizePermissions(permissions, role) {
+  const defaults = getDefaultPermissionsForRole(role);
+  if (!Array.isArray(permissions) || permissions.length === 0) {
+    return defaults;
+  }
+
+  const validPermissions = new Set(PERMISSION_CATALOG.map(item => item.key));
+  const selected = permissions
+    .map(item => String(item || '').trim())
+    .filter(item => validPermissions.has(item));
+
+  if (selected.length === 0) return defaults;
+  return [...new Set(selected)];
+}
+
+function parsePermissionsField(value, role) {
+  if (!value) {
+    return getDefaultPermissionsForRole(role);
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    return normalizePermissions(parsed, role);
+  } catch (error) {
+    return getDefaultPermissionsForRole(role);
+  }
+}
+
+function serializePermissions(permissions, role) {
+  return JSON.stringify(normalizePermissions(permissions, role));
+}
+
+function mapUserRow(row) {
+  const role = normalizeRole(row.role);
+  return {
+    id: row.id,
+    username: row.username,
+    name: row.name,
+    role,
+    permissions: parsePermissionsField(row.permissions_json, role),
+    created_at: row.created_at
+  };
+}
+
+async function ensureAdminActor(req) {
+  const actorRole = normalizeRole(req.body?.actorRole || req.query?.actorRole || '');
+  const actorId = Number(req.body?.actorId || req.query?.actorId || 0);
+
+  if (actorRole !== 'admin' || !Number.isFinite(actorId) || actorId <= 0) {
+    return false;
+  }
+
+  const [rows] = await pool.query(
+    'SELECT id FROM users WHERE id = ? AND role = ? LIMIT 1',
+    [actorId, 'admin']
+  );
+
+  return Boolean(rows[0]);
+}
+
 function sanitizeAuditPayload(payload = {}) {
   const clone = { ...payload };
   if (Object.prototype.hasOwnProperty.call(clone, 'password')) {
@@ -77,6 +174,12 @@ function normalizeText(value, fallback = '') {
   if (typeof value !== 'string') return fallback;
   const trimmed = value.trim();
   return trimmed.length ? trimmed : fallback;
+}
+
+function normalizePaymentMethod(value) {
+  const key = String(value || '').trim().toLowerCase();
+  if (!key) return 'cash';
+  return PAYMENT_METHOD_ALIASES[key] || key;
 }
 
 async function addColumnIfMissing(tableName, columnDefinition) {
@@ -333,6 +436,7 @@ async function initDatabase() {
       password VARCHAR(255) NOT NULL,
       name VARCHAR(255) NOT NULL,
       role VARCHAR(50) NOT NULL DEFAULT 'cashier',
+      permissions_json LONGTEXT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
@@ -424,6 +528,42 @@ async function initDatabase() {
   `);
 
   await pool.query(`
+    CREATE TABLE IF NOT EXISTS sales_cash (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      transaction_id INT NOT NULL,
+      sale_id INT NOT NULL,
+      total DECIMAL(12,2) NOT NULL DEFAULT 0,
+      profit DECIMAL(12,2) NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_sales_cash_created_at (created_at)
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS sales_ecocash (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      transaction_id INT NOT NULL,
+      sale_id INT NOT NULL,
+      total DECIMAL(12,2) NOT NULL DEFAULT 0,
+      profit DECIMAL(12,2) NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_sales_ecocash_created_at (created_at)
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS sales_card (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      transaction_id INT NOT NULL,
+      sale_id INT NOT NULL,
+      total DECIMAL(12,2) NOT NULL DEFAULT 0,
+      profit DECIMAL(12,2) NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_sales_card_created_at (created_at)
+    )
+  `);
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS sale_items (
       id INT AUTO_INCREMENT PRIMARY KEY,
       sale_id INT NOT NULL,
@@ -463,7 +603,21 @@ async function initDatabase() {
     )
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS exchange_settings (
+      id INT PRIMARY KEY,
+      base_currency VARCHAR(10) NOT NULL DEFAULT 'USD',
+      rate_usd DECIMAL(12,6) NOT NULL DEFAULT 1,
+      rate_zar DECIMAL(12,6) NOT NULL DEFAULT 20,
+      rate_zig DECIMAL(12,6) NOT NULL DEFAULT 400,
+      default_tax_rate_percent DECIMAL(8,4) NOT NULL DEFAULT 10,
+      allow_tax_exempt_products TINYINT(1) NOT NULL DEFAULT 0,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )
+  `);
+
   await addColumnIfMissing('products', 'cost_price DECIMAL(10,2) NOT NULL DEFAULT 0');
+  await addColumnIfMissing('users', 'permissions_json LONGTEXT NULL');
   await addColumnIfMissing('sales', "tax_rate DECIMAL(10,4) NOT NULL DEFAULT 0.1000");
   await addColumnIfMissing('sales', "currency_code VARCHAR(10) NOT NULL DEFAULT 'USD'");
   await addColumnIfMissing('sales', 'profit DECIMAL(12,2) NOT NULL DEFAULT 0');
@@ -478,13 +632,14 @@ async function initDatabase() {
         const username = String(legacyUser.username || '').trim();
         const password = String(legacyUser.password || '').trim();
         const name = String(legacyUser.name || username || 'User').trim();
-        const role = String(legacyUser.role || 'cashier').trim() || 'cashier';
+        const role = normalizeRole(legacyUser.role || 'cashier');
+        const permissionsJson = serializePermissions(legacyUser.permissions, role);
 
         if (!username || !password) continue;
 
         await pool.query(
-          'INSERT INTO users (username, password, name, role) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE name = VALUES(name), role = VALUES(role)',
-          [username, password, name, role]
+          'INSERT INTO users (username, password, name, role, permissions_json) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name = VALUES(name), role = VALUES(role), permissions_json = VALUES(permissions_json)',
+          [username, password, name, role, permissionsJson]
         );
       }
     } catch (error) {
@@ -494,10 +649,24 @@ async function initDatabase() {
 
   const [userRows] = await pool.query('SELECT COUNT(*) AS count FROM users');
   if ((userRows[0]?.count || 0) === 0) {
+    const adminPermissions = serializePermissions(null, 'admin');
     await pool.query(
-      'INSERT INTO users (username, password, name, role) VALUES (?, ?, ?, ?)',
-      ['admin', 'admin123', 'Admin User', 'admin']
+      'INSERT INTO users (username, password, name, role, permissions_json) VALUES (?, ?, ?, ?, ?)',
+      ['admin', 'admin123', 'Admin User', 'admin', adminPermissions]
     );
+  }
+
+  const [existingUsers] = await pool.query('SELECT id, role, permissions_json FROM users');
+  for (const user of existingUsers) {
+    const role = normalizeRole(user.role);
+    const normalizedPermissions = parsePermissionsField(user.permissions_json, role);
+    const nextJson = JSON.stringify(normalizedPermissions);
+    if (role !== user.role || nextJson !== user.permissions_json) {
+      await pool.query(
+        'UPDATE users SET role = ?, permissions_json = ? WHERE id = ?',
+        [role, nextJson, user.id]
+      );
+    }
   }
 
   const [productRows] = await pool.query('SELECT COUNT(*) AS count FROM products');
@@ -510,6 +679,13 @@ async function initDatabase() {
       );
     }
   }
+
+  await pool.query(
+    `INSERT INTO exchange_settings
+      (id, base_currency, rate_usd, rate_zar, rate_zig, default_tax_rate_percent, allow_tax_exempt_products)
+     VALUES (1, 'USD', 1, 20, 400, 10, 0)
+     ON DUPLICATE KEY UPDATE id = id`
+  );
 }
 
 // --- Authentication Endpoints ---
@@ -523,7 +699,7 @@ app.post('/api/login', async (req, res) => {
     }
 
     const [rows] = await pool.query(
-      'SELECT id, username, password, name, role FROM users WHERE username = ? LIMIT 1',
+      'SELECT id, username, password, name, role, permissions_json FROM users WHERE username = ? LIMIT 1',
       [username]
     );
 
@@ -533,7 +709,14 @@ app.post('/api/login', async (req, res) => {
     }
 
     await logAudit('auth.login.success', username, { userId: user.id });
-    res.json({ id: user.id, username: user.username, name: user.name, role: user.role });
+    const role = normalizeRole(user.role);
+    res.json({
+      id: user.id,
+      username: user.username,
+      name: user.name,
+      role,
+      permissions: parsePermissionsField(user.permissions_json, role)
+    });
   } catch (error) {
     await logAudit('auth.login.failed', req.body?.username || 'unknown', { reason: error.message });
     res.status(500).json({ error: 'Failed to process login.' });
@@ -543,18 +726,27 @@ app.post('/api/login', async (req, res) => {
 // Register endpoint
 app.post('/api/register', async (req, res) => {
   try {
-    const { username, password, name } = req.body;
+    const { username, password, name, role } = req.body;
     if (!username || !password || !name) {
       return res.status(400).json({ error: 'All fields required' });
     }
 
+    const normalizedRole = normalizeRole(role || 'cashier');
+    const permissionsJson = serializePermissions(req.body?.permissions, normalizedRole);
+
     const [result] = await pool.query(
-      'INSERT INTO users (username, password, name, role) VALUES (?, ?, ?, ?)',
-      [username, password, name, 'cashier']
+      'INSERT INTO users (username, password, name, role, permissions_json) VALUES (?, ?, ?, ?, ?)',
+      [username, password, name, normalizedRole, permissionsJson]
     );
 
-    await logAudit('user.create', username, { createdUserId: result.insertId, name });
-    res.status(201).json({ id: result.insertId, username, name, role: 'cashier' });
+    await logAudit('user.create', username, { createdUserId: result.insertId, name, role: normalizedRole });
+    res.status(201).json({
+      id: result.insertId,
+      username,
+      name,
+      role: normalizedRole,
+      permissions: parsePermissionsField(permissionsJson, normalizedRole)
+    });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
       return res.status(409).json({ error: 'Username already exists' });
@@ -567,14 +759,14 @@ app.post('/api/register', async (req, res) => {
 app.get('/api/user/:id', async (req, res) => {
   try {
     const [rows] = await pool.query(
-      'SELECT id, username, name, role, created_at FROM users WHERE id = ? LIMIT 1',
+      'SELECT id, username, name, role, permissions_json, created_at FROM users WHERE id = ? LIMIT 1',
       [Number(req.params.id)]
     );
 
     if (!rows[0]) {
       return res.status(404).json({ error: 'User not found' });
     }
-    res.json(rows[0]);
+    res.json(mapUserRow(rows[0]));
   } catch (error) {
     res.status(500).json({ error: 'Failed to retrieve user.' });
   }
@@ -583,18 +775,91 @@ app.get('/api/user/:id', async (req, res) => {
 app.get('/api/users', async (req, res) => {
   try {
     const [rows] = await pool.query(
-      'SELECT id, username, name, role, created_at FROM users ORDER BY created_at DESC, id DESC'
+      'SELECT id, username, name, role, permissions_json, created_at FROM users ORDER BY created_at DESC, id DESC'
     );
 
-    res.json(rows.map(row => ({
-      id: row.id,
-      username: row.username,
-      name: row.name,
-      role: row.role,
-      created_at: row.created_at
-    })));
+    res.json(rows.map(mapUserRow));
   } catch (error) {
     res.status(500).json({ error: 'Failed to retrieve users.' });
+  }
+});
+
+app.get('/api/permissions/catalog', (req, res) => {
+  res.json({
+    roles: ALLOWED_ROLES,
+    permissions: PERMISSION_CATALOG,
+    defaultsByRole: ROLE_DEFAULT_PERMISSIONS
+  });
+});
+
+app.put('/api/users/:id/access', async (req, res) => {
+  try {
+    const targetUserId = Number(req.params.id);
+    if (!Number.isFinite(targetUserId) || targetUserId <= 0) {
+      return res.status(400).json({ error: 'Invalid user id.' });
+    }
+
+    const canManage = await ensureAdminActor(req);
+    if (!canManage) {
+      return res.status(403).json({ error: 'Only administrators can manage roles and permissions.' });
+    }
+
+    const role = normalizeRole(req.body?.role || 'cashier');
+    const permissions = normalizePermissions(req.body?.permissions, role);
+    const permissionsJson = JSON.stringify(permissions);
+
+    const [result] = await pool.query(
+      'UPDATE users SET role = ?, permissions_json = ? WHERE id = ?',
+      [role, permissionsJson, targetUserId]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    const [rows] = await pool.query(
+      'SELECT id, username, name, role, permissions_json, created_at FROM users WHERE id = ? LIMIT 1',
+      [targetUserId]
+    );
+
+    await logAudit('user.access.updated', String(req.body?.actorId || 'admin'), {
+      targetUserId,
+      role,
+      permissions
+    });
+
+    res.json(mapUserRow(rows[0]));
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update user access.' });
+  }
+});
+
+app.delete('/api/users/:id', async (req, res) => {
+  try {
+    const targetUserId = Number(req.params.id);
+    if (!Number.isFinite(targetUserId) || targetUserId <= 0) {
+      return res.status(400).json({ error: 'Invalid user id.' });
+    }
+
+    const canDelete = await ensureAdminActor(req);
+    if (!canDelete) {
+      return res.status(403).json({ error: 'Only administrators can delete users.' });
+    }
+
+    const actorId = Number(req.body?.actorId || 0);
+    if (actorId && actorId === targetUserId) {
+      return res.status(400).json({ error: 'Administrator cannot delete the currently authenticated account.' });
+    }
+
+    const [result] = await pool.query('DELETE FROM users WHERE id = ?', [targetUserId]);
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    await logAudit('user.delete', String(actorId || 'admin'), { targetUserId });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete user.' });
   }
 });
 
@@ -742,7 +1007,8 @@ app.post('/api/sales', async (req, res) => {
     }
 
     const normalizedCurrency = String(currencyCode || 'USD').trim().toUpperCase();
-    const safeCurrency = ['USD', 'ZAR', 'ZIG'].includes(normalizedCurrency) ? normalizedCurrency : 'USD';
+    const safeCurrency = ALLOWED_CURRENCIES.includes(normalizedCurrency) ? normalizedCurrency : 'USD';
+    const safePaymentMethod = normalizePaymentMethod(paymentMethod);
     const normalizedTaxRate = Number.isFinite(Number(taxRate)) ? Number(taxRate) : 0.10;
 
     await conn.beginTransaction();
@@ -798,7 +1064,7 @@ app.post('/api/sales', async (req, res) => {
         safeCurrency,
         Number(totalProfit) || 0,
         normalizedItems.length,
-        paymentMethod || null
+        safePaymentMethod
       ]
     );
 
@@ -824,7 +1090,7 @@ app.post('/api/sales', async (req, res) => {
         Number(tax) || 0,
         Number(total) || 0,
         Number(totalProfit) || 0,
-        paymentMethod || null
+        safePaymentMethod
       ]
     );
 
@@ -845,11 +1111,28 @@ app.post('/api/sales', async (req, res) => {
       );
     }
 
+    if (safePaymentMethod === 'cash') {
+      await conn.query(
+        'INSERT INTO sales_cash (transaction_id, sale_id, total, profit) VALUES (?, ?, ?, ?)',
+        [transactionResult.insertId, saleResult.insertId, Number(total) || 0, Number(totalProfit) || 0]
+      );
+    } else if (safePaymentMethod === 'ecocash') {
+      await conn.query(
+        'INSERT INTO sales_ecocash (transaction_id, sale_id, total, profit) VALUES (?, ?, ?, ?)',
+        [transactionResult.insertId, saleResult.insertId, Number(total) || 0, Number(totalProfit) || 0]
+      );
+    } else if (safePaymentMethod === 'card') {
+      await conn.query(
+        'INSERT INTO sales_card (transaction_id, sale_id, total, profit) VALUES (?, ?, ?, ?)',
+        [transactionResult.insertId, saleResult.insertId, Number(total) || 0, Number(totalProfit) || 0]
+      );
+    }
+
     await conn.commit();
     await logAudit('sale.complete', String(userId || 'unknown'), {
       saleId: saleResult.insertId,
       itemCount: normalizedItems.length,
-      paymentMethod: paymentMethod || null,
+      paymentMethod: safePaymentMethod,
       total: Number(total) || 0,
       currencyCode: safeCurrency,
       profit: Number(totalProfit) || 0
@@ -1114,12 +1397,20 @@ app.get('/api/reports', async (req, res) => {
         transactions: Number(r.transactions) || 0,
         totalSales: Number(r.totalSales) || 0
       }));
-    } else if (type === 'cash-sales') {
+    } else if (type === 'cash-sales' || type === 'ecocash-sales' || type === 'card-sales') {
       columns = ['Sale ID', 'Cashier', 'Total', 'Date'];
       columnMap = { 'Sale ID': 'saleId', Cashier: 'cashierName', Total: 'total', Date: 'date' };
 
-      const where = [`LOWER(COALESCE(s.payment_method, '')) = 'cash'`];
+      const paymentMethodByType = {
+        'cash-sales': 'cash',
+        'ecocash-sales': 'ecocash',
+        'card-sales': 'card'
+      };
+      const selectedPayment = paymentMethodByType[type] || 'cash';
+
+      const where = [`LOWER(COALESCE(s.payment_method, '')) = ?`];
       const params = [];
+      params.push(selectedPayment);
       if (startDate) {
         where.push('DATE(s.created_at) >= ?');
         params.push(startDate);
@@ -1146,6 +1437,51 @@ app.get('/api/reports', async (req, res) => {
         cashierName: r.cashierName,
         total: Number(r.total) || 0,
         date: new Date(r.created_at).toLocaleString()
+      }));
+    } else if (type === 'top-ten-products') {
+      columns = ['Product', 'Quantity Sold', 'Sales Total', 'Estimated Profit'];
+      columnMap = {
+        Product: 'productName',
+        'Quantity Sold': 'quantitySold',
+        'Sales Total': 'salesTotal',
+        'Estimated Profit': 'estimatedProfit'
+      };
+
+      const where = [];
+      const params = [];
+      if (startDate) {
+        where.push('DATE(s.created_at) >= ?');
+        params.push(startDate);
+      }
+      if (endDate) {
+        where.push('DATE(s.created_at) <= ?');
+        params.push(endDate);
+      }
+
+      const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+      const [result] = await pool.query(
+        `SELECT si.product_id AS productId,
+                si.name AS productName,
+                COALESCE(SUM(si.quantity), 0) AS quantitySold,
+                COALESCE(SUM(si.quantity * si.price), 0) AS salesTotal,
+                COALESCE(SUM(si.quantity * (si.price - COALESCE(p.cost_price, 0))), 0) AS estimatedProfit
+         FROM sale_items si
+         INNER JOIN sales s ON s.id = si.sale_id
+         LEFT JOIN products p ON p.id = si.product_id
+         ${whereSql}
+         GROUP BY si.product_id, si.name
+         ORDER BY quantitySold DESC, salesTotal DESC
+         LIMIT 10`,
+        params
+      );
+
+      rows = result.map(r => ({
+        productId: Number(r.productId) || 0,
+        productName: r.productName || 'Unknown',
+        quantitySold: Number(r.quantitySold) || 0,
+        salesTotal: Number(r.salesTotal) || 0,
+        estimatedProfit: Number(r.estimatedProfit) || 0
       }));
     } else if (type === 'audit-trail') {
       columns = ['Date', 'Actor', 'Event', 'Details'];
@@ -1227,6 +1563,10 @@ app.get('/api/reports', async (req, res) => {
 app.get('/api/dashboard/profit', async (req, res) => {
   try {
     const reportDate = toIsoDate(req.query.date) || new Date().toISOString().slice(0, 10);
+    const monthStart = `${reportDate.slice(0, 7)}-01`;
+    const nextMonthDate = new Date(`${monthStart}T00:00:00`);
+    nextMonthDate.setMonth(nextMonthDate.getMonth() + 1);
+    const monthEndExclusive = nextMonthDate.toISOString().slice(0, 10);
 
     const [summaryRows] = await pool.query(
       `SELECT COALESCE(SUM(total), 0) AS totalSales,
@@ -1262,6 +1602,27 @@ app.get('/api/dashboard/profit', async (req, res) => {
       [reportDate]
     );
 
+    const [byPaymentRows] = await pool.query(
+      `SELECT COALESCE(NULLIF(LOWER(t.payment_method), ''), 'unknown') AS paymentMethod,
+              COALESCE(SUM(t.total), 0) AS salesTotal,
+              COALESCE(SUM(t.profit), 0) AS profit,
+              COUNT(*) AS transactions
+       FROM transactions t
+       WHERE DATE(t.created_at) = ?
+       GROUP BY COALESCE(NULLIF(LOWER(t.payment_method), ''), 'unknown')
+       ORDER BY salesTotal DESC`,
+      [reportDate]
+    );
+
+    const [monthSummaryRows] = await pool.query(
+      `SELECT COALESCE(SUM(total), 0) AS totalSales,
+              COALESCE(SUM(profit), 0) AS totalProfit,
+              COUNT(*) AS transactions
+       FROM transactions
+       WHERE created_at >= ? AND created_at < ?`,
+      [monthStart, monthEndExclusive]
+    );
+
     const [lastAuditRows] = await pool.query(
       `SELECT created_at
        FROM audit_logs
@@ -1279,8 +1640,20 @@ app.get('/api/dashboard/profit', async (req, res) => {
         transactions: Number(summaryRows[0]?.transactions) || 0,
         lastAuditAt: lastAuditRows[0]?.created_at ? new Date(lastAuditRows[0].created_at).toLocaleString() : null
       },
+      monthSummary: {
+        month: reportDate.slice(0, 7),
+        totalSales: Number(monthSummaryRows[0]?.totalSales) || 0,
+        totalProfit: Number(monthSummaryRows[0]?.totalProfit) || 0,
+        transactions: Number(monthSummaryRows[0]?.transactions) || 0
+      },
       byCurrency: (byCurrencyRows || []).map(row => ({
         currency: row.currency,
+        salesTotal: Number(row.salesTotal) || 0,
+        profit: Number(row.profit) || 0,
+        transactions: Number(row.transactions) || 0
+      })),
+      byPayment: (byPaymentRows || []).map(row => ({
+        paymentMethod: row.paymentMethod,
         salesTotal: Number(row.salesTotal) || 0,
         profit: Number(row.profit) || 0,
         transactions: Number(row.transactions) || 0
@@ -1315,7 +1688,10 @@ app.post('/api/reports/email', async (req, res) => {
     const titleMap = {
       'sales-by-cashier': 'Sales Report by Cashier',
       'audit-trail': 'Audit Trail Log',
-      'cash-sales': 'Cash Sales Report'
+      'cash-sales': 'Cash Sales Report',
+      'ecocash-sales': 'EcoCash Sales Report',
+      'card-sales': 'Card Sales Report',
+      'top-ten-products': 'Top 10 Products Report'
     };
 
     const reportTitle = titleMap[report.type] || 'POS Report';
@@ -1346,6 +1722,94 @@ app.post('/api/reports/email', async (req, res) => {
     res.json({ success: true, message: 'Report email sent successfully.' });
   } catch (error) {
     res.status(500).json({ error: error.message || 'Failed to send report email.' });
+  }
+});
+
+app.get('/api/admin/exchange-settings', async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT * FROM exchange_settings WHERE id = 1 LIMIT 1');
+    if (!rows.length) return res.status(404).json({ message: 'Exchange settings not configured' });
+
+    const r = rows[0];
+    res.json({
+      baseCurrency: r.base_currency,
+      rates: {
+        USD: Number(r.rate_usd),
+        ZAR: Number(r.rate_zar),
+        ZIG: Number(r.rate_zig)
+      },
+      defaultTaxRatePercent: Number(r.default_tax_rate_percent),
+      allowTaxExemptProducts: !!r.allow_tax_exempt_products,
+      updatedAt: r.updated_at
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to load exchange settings.' });
+  }
+});
+
+app.put('/api/admin/exchange-settings', async (req, res) => {
+  try {
+    const { baseCurrency, rates, defaultTaxRatePercent, allowTaxExemptProducts } = req.body || {};
+    const allowed = ['USD', 'ZAR', 'ZIG'];
+
+    if (!allowed.includes(baseCurrency)) {
+      return res.status(400).json({ message: 'Invalid baseCurrency' });
+    }
+
+    const rateUSD = Number(rates?.USD);
+    const rateZAR = Number(rates?.ZAR);
+    const rateZIG = Number(rates?.ZIG);
+
+    if (![rateUSD, rateZAR, rateZIG].every(v => Number.isFinite(v) && v > 0)) {
+      return res.status(400).json({ message: 'Invalid rates' });
+    }
+
+    await pool.query(
+      `INSERT INTO exchange_settings
+        (id, base_currency, rate_usd, rate_zar, rate_zig, default_tax_rate_percent, allow_tax_exempt_products)
+       VALUES (1, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+        base_currency = VALUES(base_currency),
+        rate_usd = VALUES(rate_usd),
+        rate_zar = VALUES(rate_zar),
+        rate_zig = VALUES(rate_zig),
+        default_tax_rate_percent = VALUES(default_tax_rate_percent),
+        allow_tax_exempt_products = VALUES(allow_tax_exempt_products)`,
+      [
+        baseCurrency,
+        rateUSD,
+        rateZAR,
+        rateZIG,
+        Number(defaultTaxRatePercent || 0),
+        allowTaxExemptProducts ? 1 : 0
+      ]
+    );
+
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to save exchange settings.' });
+  }
+});
+
+app.get('/api/exchange-rates/current', async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT * FROM exchange_settings WHERE id = 1 LIMIT 1');
+    if (!rows.length) return res.status(404).json({ message: 'Exchange settings not configured' });
+
+    const r = rows[0];
+    res.json({
+      baseCurrency: r.base_currency,
+      rates: {
+        USD: Number(r.rate_usd),
+        ZAR: Number(r.rate_zar),
+        ZIG: Number(r.rate_zig)
+      },
+      defaultTaxRatePercent: Number(r.default_tax_rate_percent),
+      allowTaxExemptProducts: !!r.allow_tax_exempt_products,
+      updatedAt: r.updated_at
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to load current exchange rates.' });
   }
 });
 

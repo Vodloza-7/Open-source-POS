@@ -30,7 +30,8 @@
           <button class="admin-nav-btn" data-section="profit">Profit Dashboard</button>
           <button class="admin-nav-btn" data-section="database">Database Connection</button>
           <button class="admin-nav-btn" data-section="reports">Reports</button>
-          <button class="admin-nav-btn" data-section="settings">CURRENCY & TAX SETTINGS</button>
+          <button class="admin-nav-btn" data-section="exchange">Currency exchange rates</button>
+          <button class="admin-nav-btn" data-section="settings">Currency & Tax Settings</button>
         </nav>
 
         <div class="admin-frame admin-actions">
@@ -40,9 +41,12 @@
           <button class="btn btn-primary full-width" data-section-target="profit">Profit Dashboard</button>
           <button class="btn btn-dark full-width" data-section-target="database">Database Connection</button>
           <button class="btn btn-secondary full-width" data-section-target="reports">Generate Reports</button>
+          <button class="btn btn-dark full-width" data-section-target="exchange">Exchange Rates</button>
         </div>
       </aside>
-
+      <div class="admin-panel" id="admin-panel-exchange" data-section="exchange">
+        <div id="exchangeSettingsMount" class="panel-frame admin-placeholder">Loading exchange settings...</div>
+      </div>
       <section class="admin-panel-area">
         <div class="admin-panel is-active" id="admin-panel-users" data-section="users">
           <div class="panel-header">
@@ -72,6 +76,15 @@
                   <label for="newUserPassword">Password</label>
                   <input type="password" id="newUserPassword" required>
                 </div>
+                <div class="form-group">
+                  <label for="newUserRole">Role</label>
+                  <select id="newUserRole" required>
+                    <option value="cashier">Cashier</option>
+                    <option value="supervisor">Supervisor</option>
+                    <option value="manager">Manager</option>
+                    <option value="admin">Administrator</option>
+                  </select>
+                </div>
               </div>
               <button type="submit" class="btn btn-primary">Add User</button>
             </form>
@@ -79,7 +92,7 @@
           </div>
 
           <div class="panel-frame">
-            <h3>Current Users</h3>
+            <h3>Current Users, Roles & Permissions</h3>
             <div id="usersListContainer" class="admin-placeholder">Loading users...</div>
             <div id="usersListStatus" class="status-message"></div>
           </div>
@@ -187,6 +200,11 @@
           </div>
 
           <div class="panel-frame">
+            <h3>By Payment Method</h3>
+            <div id="profitByPayment" class="admin-placeholder">No data.</div>
+          </div>
+
+          <div class="panel-frame">
             <h3>By Cashier</h3>
             <div id="profitByCashier" class="admin-placeholder">No data.</div>
           </div>
@@ -228,6 +246,7 @@
                   <input type="number" id="taxRate" min="0" max="100" step="0.01" required>
                 </div>
               </div>
+                                          
               <div class="form-row">
                 <div class="form-group">
                   <label for="currencyPreview">Preview</label>
@@ -316,6 +335,9 @@
                      <option value="sales-by-cashier">Sales Report by Cashier</option>
                      <option value="audit-trail">Audit Trail Log</option>
                      <option value="cash-sales">Cash Sales Only</option>
+                     <option value="ecocash-sales">EcoCash Sales Only</option>
+                     <option value="card-sales">Card Sales Only</option>
+                     <option value="top-ten-products">Top 10 Products</option>
                      <option value="end-of-day-profit">End of Day Profit</option>
                    </select>
                  </div>

@@ -11,11 +11,22 @@ const Router = {
     }
   },
 
-  registerPage(name, htmlFile, initFunction, adminOnly = false) {
+  registerPage(name, htmlFile, initFunction, access = false) {
+    const normalizedAccess = typeof access === 'object' && access !== null
+      ? {
+          adminOnly: Boolean(access.adminOnly),
+          requiredPermission: String(access.requiredPermission || '').trim()
+        }
+      : {
+          adminOnly: Boolean(access),
+          requiredPermission: ''
+        };
+
     this.pages[name] = {
       file: htmlFile,
       init: initFunction,
-      adminOnly: adminOnly
+      adminOnly: normalizedAccess.adminOnly,
+      requiredPermission: normalizedAccess.requiredPermission
     };
   },
 
@@ -44,6 +55,12 @@ const Router = {
         console.warn(`Access Denied: User is not an admin. Attempted to navigate to '${pageName}'.`);
         // Optionally, navigate to a 'denied' page or back to the POS
         this.navigate('pos'); 
+        return;
+      }
+
+      if (page.requiredPermission && !Auth.hasPermission(page.requiredPermission)) {
+        console.warn(`Access Denied: Missing permission '${page.requiredPermission}' for page '${pageName}'.`);
+        this.navigate('pos');
         return;
       }
 

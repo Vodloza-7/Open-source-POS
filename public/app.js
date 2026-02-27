@@ -13,9 +13,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Register pages (with adminOnly flag)
   Router.registerPage('login', 'pages/login.html', () => LoginModule.init());
   Router.registerPage('pos', 'pages/pos.html', () => POSModule.init());
-  Router.registerPage('products', 'pages/products.html', () => ProductsModule.init(), false);
-  Router.registerPage('sales', 'pages/sales.html', () => SalesModule.init(), true);
-  Router.registerPage('admin', 'pages/admin.html', () => AdminModule.init(), true);
+  Router.registerPage('products', 'pages/products.html', () => ProductsModule.init(), {
+    requiredPermission: 'alter_inventory'
+  });
+  Router.registerPage('sales', 'pages/sales.html', () => SalesModule.init(), {
+    requiredPermission: 'manage_sales_orders'
+  });
+  Router.registerPage('admin', 'pages/admin.html', () => AdminModule.init(), { adminOnly: true });
 
   // Initialize auth
   const user = Auth.init();
