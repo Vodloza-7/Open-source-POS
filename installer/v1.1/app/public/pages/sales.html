@@ -1,0 +1,47 @@
+<div id="salesPage" class="sales-page">
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-left">
+        <h1>Sales History</h1>
+      </div>
+      
+      <div class="header-right">
+        <div class="user-info">
+          <span class="user-label">User:</span>
+          <span class="user-name" id="userName"></span>
+          <span class="user-role" id="userRole"></span>
+        </div>
+        <button id="manageProductsBtn" class="btn btn-primary">Manage Products</button>
+        <button id="backToPosBtn" class="btn btn-secondary">Back to POS</button>
+        <button id="logoutBtn" class="btn btn-danger">Logout</button>
+      </div>
+    </header>
+
+    <!-- Sales List -->
+    <div class="sales-list">
+      <h3>Recent Transactions</h3>
+      <div class="report-summary">
+        <div>Total Sales: <strong id="reportTotalSales">$0.00</strong></div>
+        <div>Items Sold: <strong id="reportTotalItems">0</strong></div>
+        <button id="downloadReportBtn" class="btn btn-secondary btn-sm">Download Report (CSV)</button>
+      </div>
+      <div id="salesLoadingStatus" class="loading">Loading sales history...</div>
+      <table id="salesTable" class="sales-table">
+        <thead>
+          <tr>
+            <th>Sale ID</th>
+            <th>Date & Time</th>
+            <th>Cashier</th>
+            <th>Items</th>
+            <th>Total</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="salesTableBody">
+          <!-- Sales data will be loaded here -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

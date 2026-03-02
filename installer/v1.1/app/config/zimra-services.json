@@ -1,0 +1,10 @@
+
+{
+  "baseUrl": "https://fdms.zimra.co.zw",
+  "deviceId": "EDIT_ME_DEVICE_ID",
+  "taxPayerTin": "EDIT_ME_TIN",
+  "branchCode": "EDIT_ME_BRANCH",
+  "extraParams": {
+    "env": "test"
+  }
+}

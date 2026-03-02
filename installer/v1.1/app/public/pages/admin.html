@@ -1,0 +1,576 @@
+<div id="adminPage" class="admin-page">
+  <div class="container">
+    <header class="header admin-header">
+      <div class="header-left">
+        <h1>Administrator Dashboard</h1>
+      </div>
+      <div class="header-right">
+        <button id="openDbConnectionBtn" class="btn btn-dark">Database Connection</button>
+        <button id="backToPosBtn" class="btn btn-secondary">Back to POS</button>
+        <button id="logoutBtn" class="btn btn-danger">Logout</button>
+      </div>
+    </header>
+
+    <div class="admin-dashboard">
+      <aside class="admin-sidebar">
+        <div class="admin-frame admin-brand">
+          <p class="admin-kicker">Control Center</p>
+          <h2>System Administrator</h2>
+          <p class="admin-subtitle">Manage users, inventory, suppliers, and system settings.</p>
+          <div class="admin-badges">
+            <span class="admin-badge admin-badge-blue">Secure</span>
+            <span class="admin-badge admin-badge-dark">Restricted</span>
+          </div>
+        </div>
+
+        <nav class="admin-frame admin-nav" aria-label="Admin Sections">
+          <button class="admin-nav-btn is-active" data-section="users">Manage Users</button>
+          <button class="admin-nav-btn" data-section="company">Company Profile</button>
+          <button class="admin-nav-btn" data-section="security">Security Sessions</button>
+          <button class="admin-nav-btn" data-section="stock">Manage Stock</button>
+          <button class="admin-nav-btn" data-section="suppliers">Manage Suppliers</button>
+          <button class="admin-nav-btn" data-section="profit">Profit Dashboard</button>
+          <button class="admin-nav-btn" data-section="database">Database Connection</button>
+          <button class="admin-nav-btn" data-section="reports">Reports</button>
+          <button class="admin-nav-btn" data-section="exchange">Currency exchange rates</button>
+          <button class="admin-nav-btn" data-section="settings">Currency & Tax Settings</button>
+        </nav>
+
+        <div class="admin-frame admin-actions">
+          <button class="btn btn-primary full-width" data-section-target="users">Add User</button>
+          <button class="btn btn-primary full-width" data-section-target="company">Edit Company Profile</button>
+          <button class="btn btn-dark full-width" data-section-target="security">View Security Sessions</button>
+          <button class="btn btn-dark full-width" data-section-target="stock">Update Stock</button>
+          <button class="btn btn-danger full-width" data-section-target="suppliers">Review Suppliers</button>
+          <button class="btn btn-primary full-width" data-section-target="profit">Profit Dashboard</button>
+          <button class="btn btn-dark full-width" data-section-target="database">Database Connection</button>
+          <button class="btn btn-secondary full-width" data-section-target="reports">Generate Reports</button>
+          <button class="btn btn-dark full-width" data-section-target="exchange">Exchange Rates</button>
+        </div>
+      </aside>
+      <div class="admin-panel" id="admin-panel-exchange" data-section="exchange">
+        <div id="exchangeSettingsMount" class="panel-frame admin-placeholder">Loading exchange settings...</div>
+      </div>
+      <section class="admin-panel-area">
+        <div class="admin-panel is-active" id="admin-panel-users" data-section="users">
+          <div class="panel-header">
+            <div>
+              <h2>Manage Users</h2>
+              <p>Invite, onboard, and maintain system access.</p>
+            </div>
+            <div class="panel-actions">
+              <button class="btn btn-primary" data-section-target="users">Add User</button>
+              <button class="btn btn-dark" id="refreshUsersBtn" type="button">Refresh Users</button>
+            </div>
+          </div>
+
+          <div class="panel-frame">
+            <form id="addUserForm" class="add-user-form">
+              <h3>Add New User</h3>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="newUserName">Full Name</label>
+                  <input type="text" id="newUserName" required>
+                </div>
+                <div class="form-group">
+                  <label for="newUserUsername">Username</label>
+                  <input type="text" id="newUserUsername" required>
+                </div>
+                <div class="form-group">
+                  <label for="newUserPassword">Password</label>
+                  <input type="password" id="newUserPassword" required>
+                </div>
+                <div class="form-group">
+                  <label for="newUserRole">Role</label>
+                  <select id="newUserRole" required>
+                    <option value="cashier">Cashier</option>
+                    <option value="supervisor">Supervisor</option>
+                    <option value="manager">Manager</option>
+                    <option value="admin">Administrator</option>
+                  </select>
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary">Add User</button>
+            </form>
+            <div id="addUserStatus" class="status-message"></div>
+          </div>
+
+          <div class="panel-frame">
+            <h3>Current Users, Roles & Permissions</h3>
+            <div id="usersListContainer" class="admin-placeholder">Loading users...</div>
+            <div id="usersListStatus" class="status-message"></div>
+          </div>
+        </div>
+
+        <div class="admin-panel" id="admin-panel-company" data-section="company">
+          <div class="panel-header">
+            <div>
+              <h2>Company Profile</h2>
+              <p>Edit company details stored in the database for official use and branding.</p>
+            </div>
+            <div class="panel-actions">
+              <button class="btn btn-dark" id="refreshCompanyProfileBtn" type="button">Refresh Profile</button>
+            </div>
+          </div>
+
+          <div class="panel-frame">
+            <form id="companyProfileForm" class="system-settings-form">
+              <h3>Core Identity</h3>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="companyLegalName">Legal Name</label>
+                  <input type="text" id="companyLegalName" maxlength="255" required>
+                </div>
+                <div class="form-group">
+                  <label for="companyTradingName">Trading Name</label>
+                  <input type="text" id="companyTradingName" maxlength="255">
+                </div>
+                <div class="form-group">
+                  <label for="companyEdition">Company Edition</label>
+                  <input type="text" id="companyEdition" maxlength="120" placeholder="e.g. Enterprise Edition">
+                </div>
+              </div>
+
+              <h3>Support & Contact</h3>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="companySupportPhone">Support Phone</label>
+                  <input type="text" id="companySupportPhone" maxlength="80">
+                </div>
+                <div class="form-group">
+                  <label for="companySupportEmail">Support Email</label>
+                  <input type="email" id="companySupportEmail" maxlength="180">
+                </div>
+                <div class="form-group">
+                  <label for="companyWebsite">Website</label>
+                  <input type="text" id="companyWebsite" maxlength="255">
+                </div>
+              </div>
+
+              <h3>Location & Compliance</h3>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="companyAddressLine">Address</label>
+                  <input type="text" id="companyAddressLine" maxlength="255">
+                </div>
+                <div class="form-group">
+                  <label for="companyCity">City</label>
+                  <input type="text" id="companyCity" maxlength="120">
+                </div>
+                <div class="form-group">
+                  <label for="companyCountry">Country</label>
+                  <input type="text" id="companyCountry" maxlength="120">
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="companyVat">VAT Number</label>
+                  <input type="text" id="companyVat" maxlength="100">
+                </div>
+                <div class="form-group">
+                  <label for="companyTin">TIN Number</label>
+                  <input type="text" id="companyTin" maxlength="100">
+                </div>
+                <div class="form-group">
+                  <label for="companyRegNumber">Registration Number</label>
+                  <input type="text" id="companyRegNumber" maxlength="120">
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-primary">Save Company Profile</button>
+            </form>
+            <div id="companyProfileStatus" class="status-message"></div>
+          </div>
+        </div>
+
+        <div class="admin-panel" id="admin-panel-security" data-section="security">
+          <div class="panel-header">
+            <div>
+              <h2>Security Sessions</h2>
+              <p>Monitor all logged-in devices with IP address, device name, and activity timestamps.</p>
+            </div>
+            <div class="panel-actions">
+              <button class="btn btn-dark" id="refreshSecuritySessionsBtn" type="button">Refresh Sessions</button>
+            </div>
+          </div>
+
+          <div class="panel-frame">
+            <div id="securitySessionsContainer" class="admin-placeholder">Loading security sessions...</div>
+            <div id="securitySessionsStatus" class="status-message"></div>
+          </div>
+        </div>
+
+        <div class="admin-panel" id="admin-panel-stock" data-section="stock">
+          <div class="panel-header">
+            <div>
+              <h2>Manage Stock</h2>
+              <p>Add stock, remove stock, and view current stock levels in one place.</p>
+            </div>
+            <div class="panel-actions">
+              <button class="btn btn-dark" id="refreshStockBtn" type="button">Refresh Stock</button>
+            </div>
+          </div>
+
+          <div class="panel-frame">
+            <form id="stockAdjustForm" class="system-settings-form">
+              <h3>Stock Adjustment</h3>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="stockProductId">Product</label>
+                  <select id="stockProductId" required></select>
+                </div>
+                <div class="form-group">
+                  <label for="stockAction">Action</label>
+                  <select id="stockAction" required>
+                    <option value="add">Add Stock</option>
+                    <option value="remove">Remove Stock</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="stockQuantity">Quantity</label>
+                  <input type="number" id="stockQuantity" min="1" required>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="stockReason">Reason</label>
+                  <input type="text" id="stockReason" placeholder="e.g. Restock, Damaged items">
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary">Apply Stock Change</button>
+            </form>
+            <div id="stockAdjustStatus" class="status-message"></div>
+          </div>
+
+          <div class="panel-frame">
+            <h3>Stock Overview</h3>
+            <div id="stockTableContainer" class="admin-placeholder">Loading stock...</div>
+          </div>
+        </div>
+
+        <div class="admin-panel" id="admin-panel-suppliers" data-section="suppliers">
+          <div class="panel-header">
+            <div>
+              <h2>Manage Suppliers</h2>
+              <p>Add, edit, and remove supplier contacts and addresses.</p>
+            </div>
+            <div class="panel-actions">
+              <button class="btn btn-dark" id="refreshSuppliersBtn" type="button">Refresh Suppliers</button>
+            </div>
+          </div>
+
+          <div class="panel-frame">
+            <form id="supplierForm" class="system-settings-form">
+              <h3>Supplier Details</h3>
+              <input type="hidden" id="supplierId">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="supplierName">Supplier Name</label>
+                  <input type="text" id="supplierName" maxlength="255" required>
+                </div>
+                <div class="form-group">
+                  <label for="supplierContactPerson">Contact Person</label>
+                  <input type="text" id="supplierContactPerson" maxlength="255">
+                </div>
+                <div class="form-group">
+                  <label for="supplierPhone">Phone</label>
+                  <input type="text" id="supplierPhone" maxlength="80">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="supplierEmail">Email</label>
+                  <input type="email" id="supplierEmail" maxlength="180">
+                </div>
+                <div class="form-group">
+                  <label for="supplierAddressLine">Address</label>
+                  <input type="text" id="supplierAddressLine" maxlength="255">
+                </div>
+                <div class="form-group">
+                  <label><input type="checkbox" id="supplierIsActive" checked> Active Supplier</label>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group" style="flex: 1 1 100%;">
+                  <label for="supplierNotes">Notes</label>
+                  <textarea id="supplierNotes" rows="3" placeholder="Delivery terms, payment terms, lead times..."></textarea>
+                </div>
+              </div>
+              <div class="panel-actions">
+                <button type="submit" class="btn btn-primary" id="saveSupplierBtn">Save Supplier</button>
+                <button type="button" class="btn btn-secondary" id="clearSupplierFormBtn">Clear</button>
+              </div>
+            </form>
+            <div id="suppliersStatus" class="status-message"></div>
+          </div>
+
+          <div class="panel-frame">
+            <h3>Supplier Directory</h3>
+            <div id="suppliersTableContainer" class="admin-placeholder">Loading suppliers...</div>
+          </div>
+        </div>
+
+        <div class="admin-panel" id="admin-panel-profit" data-section="profit">
+          <div class="panel-header">
+            <div>
+              <h2>Profit Dashboard</h2>
+              <p>Daily totals, currency profit split, and cashier contribution from XAMPP transactions.</p>
+            </div>
+            <div class="panel-actions">
+              <input type="date" id="profitDate">
+              <button class="btn btn-dark" id="refreshProfitDashboardBtn" type="button">Refresh</button>
+            </div>
+          </div>
+
+          <div class="panel-frame">
+            <div id="profitSummaryCards" class="admin-placeholder">Loading profit dashboard...</div>
+            <div id="profitDashboardStatus" class="status-message"></div>
+          </div>
+
+          <div class="panel-frame">
+            <h3>By Currency</h3>
+            <div id="profitByCurrency" class="admin-placeholder">No data.</div>
+          </div>
+
+          <div class="panel-frame">
+            <h3>By Payment Method</h3>
+            <div id="profitByPayment" class="admin-placeholder">No data.</div>
+          </div>
+
+          <div class="panel-frame">
+            <h3>By Cashier</h3>
+            <div id="profitByCashier" class="admin-placeholder">No data.</div>
+          </div>
+        </div>
+
+        <div class="admin-panel" id="admin-panel-settings" data-section="settings">
+          <div class="panel-header">
+            <div>
+              <h2>System Settings</h2>
+              <p>Configure currency, company parameters, and receipt format.</p>
+            </div>
+            <div class="panel-actions">
+              <button class="btn btn-dark" id="resetSystemSettingsBtn" type="button">Reset Defaults</button>
+            </div>
+          </div>
+
+          <div class="panel-frame">
+            <form id="systemSettingsForm" class="system-settings-form">
+              <h3>Currency Settings</h3>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="currencyCode">Currency Code</label>
+                  <select id="currencyCode" required>
+                    <option value="USD">USD - US Dollar</option>
+                    <option value="EUR">EUR - Euro</option>
+                    <option value="GBP">GBP - British Pound</option>
+                    <option value="KES">KES - Kenyan Shilling</option>
+                    <option value="GHS">GHS - Ghana Cedi</option>
+                    <option value="NGN">NGN - Nigerian Naira</option>
+                    <option value="ZAR">ZAR - South African Rand</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="currencySymbol">Currency Symbol</label>
+                  <input type="text" id="currencySymbol" maxlength="4" required>
+                </div>
+                <div class="form-group">
+                  <label for="taxRate">Tax Rate (%)</label>
+                  <input type="number" id="taxRate" min="0" max="100" step="0.01" required>
+                </div>
+              </div>
+                                          
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="currencyPreview">Preview</label>
+                  <input type="text" id="currencyPreview" readonly>
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary">Save Settings</button>
+            </form>
+            <div id="systemSettingsStatus" class="status-message"></div>
+          </div>
+
+          <div class="panel-frame">
+            <form id="companySettingsForm" class="system-settings-form">
+              <h3>Company Parameters</h3>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="companyName">Company Name</label>
+                  <input type="text" id="companyName" maxlength="255" required>
+                </div>
+                <div class="form-group">
+                  <label for="companyAddress">Company Address</label>
+                  <input type="text" id="companyAddress" maxlength="255">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="companyVatNumber">VAT Number</label>
+                  <input type="text" id="companyVatNumber" maxlength="100">
+                </div>
+                <div class="form-group">
+                  <label for="companyTinNumber">TIN Number</label>
+                  <input type="text" id="companyTinNumber" maxlength="100">
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary" id="saveCompanySettingsBtn">Save Company Parameters</button>
+            </form>
+            <div id="companySettingsStatus" class="status-message"></div>
+          </div>
+
+          <div class="panel-frame">
+            <form id="receiptFormatForm" class="system-settings-form">
+              <h3>Receipt Format</h3>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="receiptHeader">Receipt Header</label>
+                  <input type="text" id="receiptHeader" maxlength="255" placeholder="Optional heading above receipt number">
+                </div>
+                <div class="form-group">
+                  <label for="receiptFooter">Receipt Footer</label>
+                  <input type="text" id="receiptFooter" maxlength="255" placeholder="Thank you message">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group" style="flex: 1 1 100%;">
+                  <label for="receiptExtra">Extra Receipt Content</label>
+                  <textarea id="receiptExtra" rows="4" placeholder="Add custom lines to print on receipt"></textarea>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label><input type="checkbox" id="showCompanyDetails" checked> Show company details</label>
+                </div>
+                <div class="form-group">
+                  <label><input type="checkbox" id="showReceiptDateTime" checked> Show date/time</label>
+                </div>
+                <div class="form-group">
+                  <label><input type="checkbox" id="showReceiptCashier" checked> Show cashier</label>
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary" id="saveReceiptFormatBtn">Save Receipt Format</button>
+            </form>
+            <div id="receiptFormatStatus" class="status-message"></div>
+            <div id="receiptFormatPreview" class="receipt-format-preview"></div>
+          </div>
+
+        </div>
+
+        <div class="admin-panel" id="admin-panel-database" data-section="database">
+          <div class="panel-header">
+            <div>
+              <h2>Database Connection</h2>
+              <p>Configure server XAMPP database settings.</p>
+            </div>
+            <div class="panel-actions">
+              <button class="btn btn-danger" id="restartServerBtn" type="button">Restart Server</button>
+              <button class="btn btn-dark" id="refreshConnectionSettingsBtn" type="button">Reload Settings</button>
+              <button class="btn btn-secondary" id="checkServerStatusBtn" type="button">Check Server Status</button>
+            </div>
+          </div>
+
+          <div class="panel-frame">
+            <form id="connectionSettingsForm" class="system-settings-form">
+              <h3>Server Database Configuration</h3>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="appPort">Server Port</label>
+                  <input type="number" id="appPort" min="1" max="65535" required>
+                </div>
+                <div class="form-group">
+                  <label for="dbHost">Database Host</label>
+                  <input type="text" id="dbHost" placeholder="127.0.0.1" required>
+                </div>
+                <div class="form-group">
+                  <label for="dbPort">Database Port</label>
+                  <input type="number" id="dbPort" min="1" max="65535" required>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="dbName">Database Name</label>
+                  <input type="text" id="dbName" placeholder="pos_system" required>
+                </div>
+                <div class="form-group">
+                  <label for="dbUser">Database User</label>
+                  <input type="text" id="dbUser" placeholder="root" required>
+                </div>
+                <div class="form-group">
+                  <label for="dbPassword">Database Password</label>
+                  <input type="password" id="dbPassword" placeholder="">
+                </div>
+              </div>
+
+              <div class="panel-actions">
+                <button type="button" id="useXamppDefaultsBtn" class="btn btn-secondary">Use XAMPP Defaults</button>
+                <button type="button" id="testDbConnectionBtn" class="btn btn-dark">Test Connection</button>
+                <button type="submit" class="btn btn-primary">Save Connection Settings</button>
+              </div>
+            </form>
+
+            <div id="connectionSettingsStatus" class="status-message"></div>
+            <div class="connection-health" id="serverHealthStatus">Server status not checked yet.</div>
+          </div>
+        </div>
+
+         <div class="admin-panel" id="admin-panel-reports" data-section="reports">
+           <div class="panel-header">
+             <div>
+               <h2>Reports</h2>
+               <p>Generate PDF reports and send them by email.</p>
+             </div>
+           </div>
+
+           <div class="panel-frame">
+             <form id="reportForm" class="report-form">
+               <div class="form-row">
+                 <div class="form-group">
+                   <label for="reportType">Report Type</label>
+                   <select id="reportType" required>
+                     <option value="sales-by-cashier">Sales Report by Cashier</option>
+                     <option value="audit-trail">Audit Trail Log</option>
+                     <option value="cash-sales">Cash Sales Only</option>
+                     <option value="ecocash-sales">EcoCash Sales Only</option>
+                     <option value="card-sales">Card Sales Only</option>
+                     <option value="top-ten-products">Top 10 Products</option>
+                     <option value="end-of-day-profit">End of Day Profit</option>
+                   </select>
+                 </div>
+                 <div class="form-group">
+                   <label for="reportStartDate">Start Date</label>
+                   <input type="date" id="reportStartDate">
+                 </div>
+                 <div class="form-group">
+                   <label for="reportEndDate">End Date</label>
+                   <input type="date" id="reportEndDate">
+                 </div>
+               </div>
+
+               <div class="form-row">
+                 <div class="form-group">
+                   <label for="reportEmail">Send To Email</label>
+                   <input type="email" id="reportEmail" placeholder="manager@example.com">
+                 </div>
+               </div>
+
+               <div class="panel-actions">
+                 <button type="submit" class="btn btn-primary">Preview Report</button>
+                 <button type="button" id="downloadReportPdfBtn" class="btn btn-dark">Download PDF</button>
+                 <button type="button" id="emailReportBtn" class="btn btn-secondary">Send PDF by Email</button>
+               </div>
+             </form>
+             <div id="reportStatus" class="status-message"></div>
+           </div>
+
+           <div class="panel-frame">
+             <h3>Report Preview</h3>
+             <div id="reportPreview" class="admin-placeholder">Choose report options, then click "Preview Report".</div>
+           </div>
+         </div>
+      </section>
+    </div>
+  </div>
+</div>

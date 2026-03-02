@@ -1,0 +1,150 @@
+<div id="productsPage" class="products-page">
+  <div class="container">
+    <header class="header">
+      <div class="header-left">
+        <h1>📦 Manage Products</h1>
+      </div>
+      
+      <div class="header-center">
+        <div class="datetime">
+          <div class="date" id="currentDate"></div>
+          <div class="time" id="currentTime"></div>
+        </div>
+      </div>
+      
+      <div class="header-right">
+        <div class="user-info">
+          <span class="user-label">User:</span>
+          <span class="user-name" id="userName"></span>
+          <span class="user-role" id="userRole"></span>
+        </div>
+        <button id="backBtn" class="btn btn-secondary">Back to POS</button>
+        <button id="logoutBtn" class="btn btn-danger">Logout</button>
+      </div>
+    </header>
+
+    <div class="products-interface">
+      <div class="add-product-form">
+        <h3>Add New Product</h3>
+        <form id="addProductForm">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="productName">Product Name:</label>
+              <input type="text" id="productName" required>
+            </div>
+            <div class="form-group">
+              <label for="productPrice">Price:</label>
+              <input type="number" id="productPrice" step="0.01" required>
+            </div>
+            <div class="form-group">
+              <label for="productCostPrice">Cost Price:</label>
+              <input type="number" id="productCostPrice" step="0.01" value="0">
+            </div>
+            <div class="form-group">
+              <label for="productUnit">Unit (e.g., item, case, kg):</label>
+              <input type="text" id="productUnit" placeholder="item" value="item">
+            </div>
+            <div class="form-group">
+              <label for="productBarcode">Barcode (optional):</label>
+              <input type="text" id="productBarcode" placeholder="Scan or type barcode">
+            </div>
+            <div class="form-group">
+              <label for="productHsCode">HS Code (optional):</label>
+              <input type="text" id="productHsCode" placeholder="e.g., 1006.30">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="productCategory">Category:</label>
+              <input type="text" id="productCategory">
+            </div>
+            <div class="form-group">
+              <label for="productStock">Initial Stock:</label>
+              <input type="number" id="productStock" value="0">
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary">Add Product</button>
+        </form>
+        <div id="addProductStatus" class="status-message"></div>
+      </div>
+
+      <div class="products-list">
+        <h3>Current Products</h3>
+        <div id="productsLoadingStatus" class="loading">Loading products...</div>
+        <table id="productsTable" class="products-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Category</th>
+              <th>Unit</th>
+              <th>Price</th>
+              <th>Cost</th>
+              <th>Stock</th>
+              <th>Barcode</th>
+              <th>HS Code</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="productsTableBody">
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Product Editor Modal -->
+  <div id="productEditorModal" class="modal-overlay">
+    <div class="modal-content product-editor-modal">
+      <div class="modal-header">
+        <h2 id="modalTitle">Edit Product</h2>
+        <button type="button" class="modal-close-btn" onclick="ProductsModule.closeProductEditor()">✕</button>
+      </div>
+      
+      <form id="productEditorForm">
+        <div class="form-group">
+          <label for="editorProductName">Product Name *</label>
+          <input type="text" id="editorProductName" required>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="editorProductPrice">Price *</label>
+            <input type="number" id="editorProductPrice" step="0.01" required>
+          </div>
+          <div class="form-group">
+            <label for="editorProductUnit">Unit</label>
+            <input type="text" id="editorProductUnit" placeholder="e.g., item, kg, box">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="editorProductCategory">Category</label>
+            <input type="text" id="editorProductCategory">
+          </div>
+          <div class="form-group">
+            <label for="editorProductStock">Stock</label>
+            <input type="number" id="editorProductStock" value="0">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="editorProductBarcode">Barcode</label>
+          <input type="text" id="editorProductBarcode">
+        </div>
+
+        <div class="form-group">
+          <label for="editorProductHsCode">HS Code</label>
+          <input type="text" id="editorProductHsCode">
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="ProductsModule.closeProductEditor()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Product</button>
+        </div>
+      </form>
+      
+      <div id="editorStatus" class="status-message"></div>
+    </div>
+  </div>
+</div>
