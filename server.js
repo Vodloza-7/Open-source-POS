@@ -30,7 +30,9 @@ const PERMISSION_CATALOG = [
   { key: 'add_users', label: 'Add Users' },
   { key: 'delete_users', label: 'Delete Users' },
   { key: 'alter_inventory', label: 'Alter Inventory' },
-  { key: 'manage_user_permissions', label: 'Manage User Roles & Permissions' }
+  { key: 'manage_user_permissions', label: 'Manage User Roles & Permissions' },
+  { key: 'manage_company_settings', label: 'Manage Company Parameters' },
+  { key: 'edit_receipt_format', label: 'Edit Receipt Format' }
 ];
 
 const ROLE_DEFAULT_PERMISSIONS = {
@@ -48,6 +50,34 @@ const PAYMENT_METHOD_ALIASES = {
   mobile: 'ecocash',
   card: 'card',
   wallet: 'wallet'
+};
+
+const DEFAULT_RECEIPT_SETTINGS = {
+  companyName: '',
+  companyAddress: '',
+  vatNumber: '',
+  tinNumber: '',
+  receiptHeader: '',
+  receiptFooter: 'Thank you for your purchase',
+  receiptExtra: '',
+  showCompanyDetails: true,
+  showCashier: true,
+  showDateTime: true
+};
+
+const DEFAULT_COMPANY_PROFILE = {
+  legalName: 'Impartial Enterprises',
+  tradingName: 'Impartial Enterprises POS',
+  edition: 'Company Edition',
+  supportPhone: '+263 77 000 0000',
+  supportEmail: '',
+  website: '',
+  addressLine: '',
+  city: '',
+  country: '',
+  vatNumber: '',
+  tinNumber: '',
+  registrationNumber: ''
 };
 
 function normalizeRole(role) {
@@ -176,10 +206,153 @@ function normalizeText(value, fallback = '') {
   return trimmed.length ? trimmed : fallback;
 }
 
+function normalizeBoolean(value, fallback = false) {
+  if (typeof value === 'boolean') return value;
+  if (value === 1 || value === '1' || value === 'true') return true;
+  if (value === 0 || value === '0' || value === 'false') return false;
+  return fallback;
+}
+
 function normalizePaymentMethod(value) {
   const key = String(value || '').trim().toLowerCase();
   if (!key) return 'cash';
   return PAYMENT_METHOD_ALIASES[key] || key;
+}
+
+function roundMoney(value) {
+  const num = Number(value) || 0;
+  return Math.round(num * 100) / 100;
+}
+
+function normalizeLongText(value, fallback = '', maxLength = 500) {
+  if (typeof value !== 'string') return fallback;
+  return value.trim().slice(0, maxLength);
+}
+
+function getClientIp(req) {
+  const forwarded = String(req.headers['x-forwarded-for'] || '').split(',').map(item => item.trim()).filter(Boolean);
+  if (forwarded.length) return forwarded[0].slice(0, 100);
+
+  const remote = req.socket?.remoteAddress || req.connection?.remoteAddress || req.ip || '';
+  return String(remote || '').slice(0, 100);
+}
+
+function mapCompanyProfileRow(row = {}) {
+  return {
+    legalName: String(row.legal_name || DEFAULT_COMPANY_PROFILE.legalName),
+    tradingName: String(row.trading_name || DEFAULT_COMPANY_PROFILE.tradingName),
+    edition: String(row.edition || DEFAULT_COMPANY_PROFILE.edition),
+    supportPhone: String(row.support_phone || DEFAULT_COMPANY_PROFILE.supportPhone),
+    supportEmail: String(row.support_email || DEFAULT_COMPANY_PROFILE.supportEmail),
+    website: String(row.website || DEFAULT_COMPANY_PROFILE.website),
+    addressLine: String(row.address_line || DEFAULT_COMPANY_PROFILE.addressLine),
+    city: String(row.city || DEFAULT_COMPANY_PROFILE.city),
+    country: String(row.country || DEFAULT_COMPANY_PROFILE.country),
+    vatNumber: String(row.vat_number || DEFAULT_COMPANY_PROFILE.vatNumber),
+    tinNumber: String(row.tin_number || DEFAULT_COMPANY_PROFILE.tinNumber),
+    registrationNumber: String(row.registration_number || DEFAULT_COMPANY_PROFILE.registrationNumber),
+    updatedAt: row.updated_at || null
+  };
+}
+
+function sanitizeCompanyProfilePayload(payload = {}, current = DEFAULT_COMPANY_PROFILE) {
+  return {
+    legalName: normalizeLongText(payload.legalName, current.legalName || DEFAULT_COMPANY_PROFILE.legalName, 255),
+    tradingName: normalizeLongText(payload.tradingName, current.tradingName || DEFAULT_COMPANY_PROFILE.tradingName, 255),
+    edition: normalizeLongText(payload.edition, current.edition || DEFAULT_COMPANY_PROFILE.edition, 120),
+    supportPhone: normalizeLongText(payload.supportPhone, current.supportPhone || DEFAULT_COMPANY_PROFILE.supportPhone, 80),
+    supportEmail: normalizeLongText(payload.supportEmail, current.supportEmail || DEFAULT_COMPANY_PROFILE.supportEmail, 180),
+    website: normalizeLongText(payload.website, current.website || DEFAULT_COMPANY_PROFILE.website, 255),
+    addressLine: normalizeLongText(payload.addressLine, current.addressLine || DEFAULT_COMPANY_PROFILE.addressLine, 255),
+    city: normalizeLongText(payload.city, current.city || DEFAULT_COMPANY_PROFILE.city, 120),
+    country: normalizeLongText(payload.country, current.country || DEFAULT_COMPANY_PROFILE.country, 120),
+    vatNumber: normalizeLongText(payload.vatNumber, current.vatNumber || DEFAULT_COMPANY_PROFILE.vatNumber, 100),
+    tinNumber: normalizeLongText(payload.tinNumber, current.tinNumber || DEFAULT_COMPANY_PROFILE.tinNumber, 100),
+    registrationNumber: normalizeLongText(payload.registrationNumber, current.registrationNumber || DEFAULT_COMPANY_PROFILE.registrationNumber, 120)
+  };
+}
+
+function mapLoginSessionRow(row = {}) {
+  return {
+    id: Number(row.id) || 0,
+    userId: Number(row.user_id) || 0,
+    username: String(row.username || ''),
+    userName: String(row.user_name || ''),
+    role: normalizeRole(row.user_role || ''),
+    ipAddress: String(row.ip_address || ''),
+    deviceName: String(row.device_name || 'Unknown Device'),
+    userAgent: String(row.user_agent || ''),
+    isActive: Boolean(row.is_active),
+    loginAt: row.login_at || null,
+    lastSeenAt: row.last_seen_at || null,
+    logoutAt: row.logout_at || null
+  };
+}
+
+function mapReceiptSettingsRow(row = {}) {
+  return {
+    companyName: String(row.company_name || ''),
+    companyAddress: String(row.company_address || ''),
+    vatNumber: String(row.vat_number || ''),
+    tinNumber: String(row.tin_number || ''),
+    receiptHeader: String(row.receipt_header || ''),
+    receiptFooter: String(row.receipt_footer || DEFAULT_RECEIPT_SETTINGS.receiptFooter),
+    receiptExtra: String(row.receipt_extra || ''),
+    showCompanyDetails: Boolean(row.show_company_details),
+    showCashier: Boolean(row.show_cashier),
+    showDateTime: Boolean(row.show_datetime),
+    updatedAt: row.updated_at || null
+  };
+}
+
+function sanitizeReceiptSettingsPayload(payload = {}, current = DEFAULT_RECEIPT_SETTINGS) {
+  return {
+    companyName: normalizeText(payload.companyName, current.companyName || '').slice(0, 255),
+    companyAddress: normalizeText(payload.companyAddress, current.companyAddress || '').slice(0, 255),
+    vatNumber: normalizeText(payload.vatNumber, current.vatNumber || '').slice(0, 100),
+    tinNumber: normalizeText(payload.tinNumber, current.tinNumber || '').slice(0, 100),
+    receiptHeader: normalizeText(payload.receiptHeader, current.receiptHeader || '').slice(0, 255),
+    receiptFooter: normalizeText(payload.receiptFooter, current.receiptFooter || DEFAULT_RECEIPT_SETTINGS.receiptFooter).slice(0, 255),
+    receiptExtra: typeof payload.receiptExtra === 'string'
+      ? payload.receiptExtra.trim().slice(0, 2000)
+      : (current.receiptExtra || ''),
+    showCompanyDetails: normalizeBoolean(payload.showCompanyDetails, current.showCompanyDetails),
+    showCashier: normalizeBoolean(payload.showCashier, current.showCashier),
+    showDateTime: normalizeBoolean(payload.showDateTime, current.showDateTime)
+  };
+}
+
+async function getActorRecord(req) {
+  const actorId = Number(req.body?.actorId || req.query?.actorId || 0);
+  if (!Number.isFinite(actorId) || actorId <= 0) return null;
+
+  const [rows] = await pool.query(
+    'SELECT id, role, permissions_json FROM users WHERE id = ? LIMIT 1',
+    [actorId]
+  );
+
+  const actor = rows[0];
+  if (!actor) return null;
+
+  const role = normalizeRole(actor.role);
+  return {
+    id: actor.id,
+    role,
+    permissions: parsePermissionsField(actor.permissions_json, role)
+  };
+}
+
+async function ensureActorHasPermissions(req, permissionKeys = []) {
+  const actor = await getActorRecord(req);
+  if (!actor) return false;
+  if (actor.role === 'admin') return true;
+
+  const required = Array.isArray(permissionKeys)
+    ? permissionKeys.map(key => String(key || '').trim()).filter(Boolean)
+    : [];
+
+  if (required.length === 0) return false;
+  return required.every(key => actor.permissions.includes(key));
 }
 
 async function addColumnIfMissing(tableName, columnDefinition) {
@@ -616,11 +789,86 @@ async function initDatabase() {
     )
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS receipt_settings (
+      id INT PRIMARY KEY,
+      company_name VARCHAR(255) NOT NULL DEFAULT '',
+      company_address VARCHAR(255) NOT NULL DEFAULT '',
+      vat_number VARCHAR(100) NOT NULL DEFAULT '',
+      tin_number VARCHAR(100) NOT NULL DEFAULT '',
+      receipt_header VARCHAR(255) NOT NULL DEFAULT '',
+      receipt_footer VARCHAR(255) NOT NULL DEFAULT 'Thank you for your purchase',
+      receipt_extra LONGTEXT NULL,
+      show_company_details TINYINT(1) NOT NULL DEFAULT 1,
+      show_cashier TINYINT(1) NOT NULL DEFAULT 1,
+      show_datetime TINYINT(1) NOT NULL DEFAULT 1,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS company_profile (
+      id INT PRIMARY KEY,
+      legal_name VARCHAR(255) NOT NULL DEFAULT 'Impartial Enterprises',
+      trading_name VARCHAR(255) NOT NULL DEFAULT 'Impartial Enterprises POS',
+      edition VARCHAR(120) NOT NULL DEFAULT 'Company Edition',
+      support_phone VARCHAR(80) NOT NULL DEFAULT '+263 77 000 0000',
+      support_email VARCHAR(180) NOT NULL DEFAULT '',
+      website VARCHAR(255) NOT NULL DEFAULT '',
+      address_line VARCHAR(255) NOT NULL DEFAULT '',
+      city VARCHAR(120) NOT NULL DEFAULT '',
+      country VARCHAR(120) NOT NULL DEFAULT '',
+      vat_number VARCHAR(100) NOT NULL DEFAULT '',
+      tin_number VARCHAR(100) NOT NULL DEFAULT '',
+      registration_number VARCHAR(120) NOT NULL DEFAULT '',
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS suppliers (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      contact_person VARCHAR(255) NOT NULL DEFAULT '',
+      phone VARCHAR(80) NOT NULL DEFAULT '',
+      email VARCHAR(180) NOT NULL DEFAULT '',
+      address_line VARCHAR(255) NOT NULL DEFAULT '',
+      notes LONGTEXT NULL,
+      is_active TINYINT(1) NOT NULL DEFAULT 1,
+      created_at DATETIME NULL,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_suppliers_name (name),
+      INDEX idx_suppliers_active (is_active)
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS login_sessions (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL,
+      username VARCHAR(100) NOT NULL,
+      user_name VARCHAR(255) NOT NULL,
+      user_role VARCHAR(50) NOT NULL DEFAULT 'cashier',
+      ip_address VARCHAR(100) NOT NULL,
+      device_name VARCHAR(255) NOT NULL,
+      user_agent VARCHAR(700) NOT NULL,
+      is_active TINYINT(1) NOT NULL DEFAULT 1,
+      login_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      last_seen_at DATETIME NULL,
+      logout_at DATETIME NULL,
+      INDEX idx_login_sessions_user_id (user_id),
+      INDEX idx_login_sessions_active (is_active),
+      INDEX idx_login_sessions_login_at (login_at)
+    )
+  `);
+
   await addColumnIfMissing('products', 'cost_price DECIMAL(10,2) NOT NULL DEFAULT 0');
   await addColumnIfMissing('users', 'permissions_json LONGTEXT NULL');
   await addColumnIfMissing('sales', "tax_rate DECIMAL(10,4) NOT NULL DEFAULT 0.1000");
   await addColumnIfMissing('sales', "currency_code VARCHAR(10) NOT NULL DEFAULT 'USD'");
   await addColumnIfMissing('sales', 'profit DECIMAL(12,2) NOT NULL DEFAULT 0');
+  await addColumnIfMissing('sale_items', 'cost_price DECIMAL(10,2) NOT NULL DEFAULT 0');
+  await addColumnIfMissing('sale_items', 'line_profit DECIMAL(12,2) NOT NULL DEFAULT 0');
 
   if (fs.existsSync(LEGACY_USERS_FILE_PATH)) {
     try {
@@ -686,6 +934,34 @@ async function initDatabase() {
      VALUES (1, 'USD', 1, 20, 400, 10, 0)
      ON DUPLICATE KEY UPDATE id = id`
   );
+
+  await pool.query(
+    `INSERT INTO receipt_settings
+      (id, company_name, company_address, vat_number, tin_number, receipt_header, receipt_footer, receipt_extra, show_company_details, show_cashier, show_datetime)
+     VALUES (1, '', '', '', '', '', 'Thank you for your purchase', '', 1, 1, 1)
+     ON DUPLICATE KEY UPDATE id = id`
+  );
+
+  await pool.query(
+    `INSERT INTO company_profile
+      (id, legal_name, trading_name, edition, support_phone, support_email, website, address_line, city, country, vat_number, tin_number, registration_number)
+     VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON DUPLICATE KEY UPDATE id = id`,
+    [
+      DEFAULT_COMPANY_PROFILE.legalName,
+      DEFAULT_COMPANY_PROFILE.tradingName,
+      DEFAULT_COMPANY_PROFILE.edition,
+      DEFAULT_COMPANY_PROFILE.supportPhone,
+      DEFAULT_COMPANY_PROFILE.supportEmail,
+      DEFAULT_COMPANY_PROFILE.website,
+      DEFAULT_COMPANY_PROFILE.addressLine,
+      DEFAULT_COMPANY_PROFILE.city,
+      DEFAULT_COMPANY_PROFILE.country,
+      DEFAULT_COMPANY_PROFILE.vatNumber,
+      DEFAULT_COMPANY_PROFILE.tinNumber,
+      DEFAULT_COMPANY_PROFILE.registrationNumber
+    ]
+  );
 }
 
 // --- Authentication Endpoints ---
@@ -708,14 +984,26 @@ app.post('/api/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    await logAudit('auth.login.success', username, { userId: user.id });
     const role = normalizeRole(user.role);
+    const deviceName = normalizeLongText(req.body?.deviceName, 'Unknown Device', 255) || 'Unknown Device';
+    const userAgent = normalizeLongText(req.headers['user-agent'] || req.body?.userAgent || '', 'Unknown Agent', 700) || 'Unknown Agent';
+    const ipAddress = getClientIp(req) || 'Unknown IP';
+
+    const [sessionResult] = await pool.query(
+      `INSERT INTO login_sessions
+        (user_id, username, user_name, user_role, ip_address, device_name, user_agent, is_active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
+      [user.id, user.username, user.name, role, ipAddress, deviceName, userAgent]
+    );
+
+    await logAudit('auth.login.success', username, { userId: user.id, ipAddress, deviceName, sessionId: sessionResult.insertId });
     res.json({
       id: user.id,
       username: user.username,
       name: user.name,
       role,
-      permissions: parsePermissionsField(user.permissions_json, role)
+      permissions: parsePermissionsField(user.permissions_json, role),
+      sessionId: Number(sessionResult.insertId) || 0
     });
   } catch (error) {
     await logAudit('auth.login.failed', req.body?.username || 'unknown', { reason: error.message });
@@ -834,6 +1122,69 @@ app.put('/api/users/:id/access', async (req, res) => {
   }
 });
 
+app.put('/api/users/:id', async (req, res) => {
+  try {
+    const targetUserId = Number(req.params.id);
+    if (!Number.isFinite(targetUserId) || targetUserId <= 0) {
+      return res.status(400).json({ error: 'Invalid user id.' });
+    }
+
+    const canManage = await ensureAdminActor(req);
+    if (!canManage) {
+      return res.status(403).json({ error: 'Only administrators can edit users.' });
+    }
+
+    const name = normalizeLongText(req.body?.name, '', 255);
+    const username = normalizeLongText(req.body?.username, '', 100);
+    if (!name || !username) {
+      return res.status(400).json({ error: 'Name and username are required.' });
+    }
+
+    const role = normalizeRole(req.body?.role || 'cashier');
+    const permissions = normalizePermissions(req.body?.permissions, role);
+    const permissionsJson = JSON.stringify(permissions);
+    const password = String(req.body?.password || '').trim();
+
+    let result;
+    if (password) {
+      [result] = await pool.query(
+        'UPDATE users SET name = ?, username = ?, password = ?, role = ?, permissions_json = ? WHERE id = ?',
+        [name, username, password, role, permissionsJson, targetUserId]
+      );
+    } else {
+      [result] = await pool.query(
+        'UPDATE users SET name = ?, username = ?, role = ?, permissions_json = ? WHERE id = ?',
+        [name, username, role, permissionsJson, targetUserId]
+      );
+    }
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    const [rows] = await pool.query(
+      'SELECT id, username, name, role, permissions_json, created_at FROM users WHERE id = ? LIMIT 1',
+      [targetUserId]
+    );
+
+    await logAudit('user.updated', String(req.body?.actorId || 'admin'), {
+      targetUserId,
+      name,
+      username,
+      role,
+      permissions,
+      passwordUpdated: Boolean(password)
+    });
+
+    res.json(mapUserRow(rows[0]));
+  } catch (error) {
+    if (error?.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'Username already exists.' });
+    }
+    res.status(500).json({ error: 'Failed to update user.' });
+  }
+});
+
 app.delete('/api/users/:id', async (req, res) => {
   try {
     const targetUserId = Number(req.params.id);
@@ -860,6 +1211,167 @@ app.delete('/api/users/:id', async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete user.' });
+  }
+});
+
+app.get('/api/suppliers', async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT id, name, contact_person, phone, email, address_line, notes, is_active, created_at, updated_at
+       FROM suppliers
+       ORDER BY is_active DESC, name ASC, id DESC`
+    );
+
+    res.json(rows.map(row => ({
+      id: row.id,
+      name: String(row.name || ''),
+      contactPerson: String(row.contact_person || ''),
+      phone: String(row.phone || ''),
+      email: String(row.email || ''),
+      addressLine: String(row.address_line || ''),
+      notes: String(row.notes || ''),
+      isActive: Boolean(row.is_active),
+      createdAt: row.created_at || null,
+      updatedAt: row.updated_at || null
+    })));
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to retrieve suppliers.' });
+  }
+});
+
+app.post('/api/suppliers', async (req, res) => {
+  try {
+    const canManage = await ensureActorHasPermissions(req, ['alter_inventory']);
+    if (!canManage) {
+      return res.status(403).json({ error: 'Only authorized users can add suppliers.' });
+    }
+
+    const name = normalizeLongText(req.body?.name, '', 255);
+    if (!name) {
+      return res.status(400).json({ error: 'Supplier name is required.' });
+    }
+
+    const contactPerson = normalizeLongText(req.body?.contactPerson, '', 255);
+    const phone = normalizeLongText(req.body?.phone, '', 80);
+    const email = normalizeLongText(req.body?.email, '', 180);
+    const addressLine = normalizeLongText(req.body?.addressLine, '', 255);
+    const notes = normalizeLongText(req.body?.notes, '', 3000);
+    const isActive = normalizeBoolean(req.body?.isActive, true) ? 1 : 0;
+
+    const [result] = await pool.query(
+      `INSERT INTO suppliers (name, contact_person, phone, email, address_line, notes, is_active, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
+      [name, contactPerson, phone, email, addressLine, notes, isActive]
+    );
+
+    const [rows] = await pool.query(
+      `SELECT id, name, contact_person, phone, email, address_line, notes, is_active, created_at, updated_at
+       FROM suppliers WHERE id = ? LIMIT 1`,
+      [result.insertId]
+    );
+
+    await logAudit('supplier.created', String(req.body?.actorId || 'system'), { supplierId: result.insertId, name });
+
+    const row = rows[0];
+    res.status(201).json({
+      id: row.id,
+      name: String(row.name || ''),
+      contactPerson: String(row.contact_person || ''),
+      phone: String(row.phone || ''),
+      email: String(row.email || ''),
+      addressLine: String(row.address_line || ''),
+      notes: String(row.notes || ''),
+      isActive: Boolean(row.is_active),
+      createdAt: row.created_at || null,
+      updatedAt: row.updated_at || null
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to add supplier.' });
+  }
+});
+
+app.put('/api/suppliers/:id', async (req, res) => {
+  try {
+    const supplierId = Number(req.params.id);
+    if (!Number.isFinite(supplierId) || supplierId <= 0) {
+      return res.status(400).json({ error: 'Invalid supplier id.' });
+    }
+
+    const canManage = await ensureActorHasPermissions(req, ['alter_inventory']);
+    if (!canManage) {
+      return res.status(403).json({ error: 'Only authorized users can edit suppliers.' });
+    }
+
+    const name = normalizeLongText(req.body?.name, '', 255);
+    if (!name) {
+      return res.status(400).json({ error: 'Supplier name is required.' });
+    }
+
+    const contactPerson = normalizeLongText(req.body?.contactPerson, '', 255);
+    const phone = normalizeLongText(req.body?.phone, '', 80);
+    const email = normalizeLongText(req.body?.email, '', 180);
+    const addressLine = normalizeLongText(req.body?.addressLine, '', 255);
+    const notes = normalizeLongText(req.body?.notes, '', 3000);
+    const isActive = normalizeBoolean(req.body?.isActive, true) ? 1 : 0;
+
+    const [result] = await pool.query(
+      `UPDATE suppliers
+       SET name = ?, contact_person = ?, phone = ?, email = ?, address_line = ?, notes = ?, is_active = ?
+       WHERE id = ?`,
+      [name, contactPerson, phone, email, addressLine, notes, isActive, supplierId]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Supplier not found.' });
+    }
+
+    const [rows] = await pool.query(
+      `SELECT id, name, contact_person, phone, email, address_line, notes, is_active, created_at, updated_at
+       FROM suppliers WHERE id = ? LIMIT 1`,
+      [supplierId]
+    );
+
+    await logAudit('supplier.updated', String(req.body?.actorId || 'system'), { supplierId, name, isActive: Boolean(isActive) });
+
+    const row = rows[0];
+    res.json({
+      id: row.id,
+      name: String(row.name || ''),
+      contactPerson: String(row.contact_person || ''),
+      phone: String(row.phone || ''),
+      email: String(row.email || ''),
+      addressLine: String(row.address_line || ''),
+      notes: String(row.notes || ''),
+      isActive: Boolean(row.is_active),
+      createdAt: row.created_at || null,
+      updatedAt: row.updated_at || null
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update supplier.' });
+  }
+});
+
+app.delete('/api/suppliers/:id', async (req, res) => {
+  try {
+    const supplierId = Number(req.params.id);
+    if (!Number.isFinite(supplierId) || supplierId <= 0) {
+      return res.status(400).json({ error: 'Invalid supplier id.' });
+    }
+
+    const canManage = await ensureActorHasPermissions(req, ['alter_inventory']);
+    if (!canManage) {
+      return res.status(403).json({ error: 'Only authorized users can delete suppliers.' });
+    }
+
+    const [result] = await pool.query('DELETE FROM suppliers WHERE id = ?', [supplierId]);
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Supplier not found.' });
+    }
+
+    await logAudit('supplier.deleted', String(req.body?.actorId || 'system'), { supplierId });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete supplier.' });
   }
 });
 
@@ -1001,7 +1513,7 @@ app.delete('/api/products/:id', async (req, res) => {
 app.post('/api/sales', async (req, res) => {
   const conn = await pool.getConnection();
   try {
-    const { items, subtotal, tax, total, userId, paymentMethod, currencyCode, taxRate } = req.body;
+    const { items, userId, paymentMethod, currencyCode, taxRate } = req.body;
     if (!items || !items.length) {
       return res.status(400).json({ error: 'Sale must include items' });
     }
@@ -1015,6 +1527,7 @@ app.post('/api/sales', async (req, res) => {
 
     const normalizedItems = [];
     let totalProfit = 0;
+    let calculatedSubtotal = 0;
     for (const item of items) {
       const productId = Number(item.id);
       const requestedQty = Number(item.quantity) || 0;
@@ -1037,10 +1550,12 @@ app.post('/api/sales', async (req, res) => {
         return res.status(400).json({ error: `Insufficient stock for ${product.name}` });
       }
 
-      const sellingPrice = Number(item.price ?? product.price);
+      const sellingPrice = Number(product.price) || 0;
       const costPrice = Number(product.cost_price) || 0;
-      const itemProfit = (sellingPrice - costPrice) * requestedQty;
-      totalProfit += itemProfit;
+      const lineSubtotal = roundMoney(sellingPrice * requestedQty);
+      const itemProfit = roundMoney((sellingPrice - costPrice) * requestedQty);
+      totalProfit = roundMoney(totalProfit + itemProfit);
+      calculatedSubtotal = roundMoney(calculatedSubtotal + lineSubtotal);
 
       normalizedItems.push({
         id: product.id,
@@ -1049,20 +1564,24 @@ app.post('/api/sales', async (req, res) => {
         quantity: requestedQty,
         cost_price: costPrice,
         profit: itemProfit,
+        lineSubtotal,
         barcode: product.barcode || '',
         hscode: product.hscode || ''
       });
     }
 
+    const calculatedTax = roundMoney(calculatedSubtotal * normalizedTaxRate);
+    const calculatedTotal = roundMoney(calculatedSubtotal + calculatedTax);
+
     const [saleResult] = await conn.query(
       'INSERT INTO sales (user_id, total, tax, tax_rate, currency_code, profit, items_count, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       [
         Number(userId) || null,
-        Number(total) || 0,
-        Number(tax) || 0,
+        calculatedTotal,
+        calculatedTax,
         normalizedTaxRate,
         safeCurrency,
-        Number(totalProfit) || 0,
+        totalProfit,
         normalizedItems.length,
         safePaymentMethod
       ]
@@ -1070,8 +1589,8 @@ app.post('/api/sales', async (req, res) => {
 
     for (const item of normalizedItems) {
       await conn.query(
-        'INSERT INTO sale_items (sale_id, product_id, name, quantity, price, barcode, hscode) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [saleResult.insertId, item.id, item.name, item.quantity, item.price, item.barcode, item.hscode]
+        'INSERT INTO sale_items (sale_id, product_id, name, quantity, price, cost_price, line_profit, barcode, hscode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [saleResult.insertId, item.id, item.name, item.quantity, item.price, item.cost_price, item.profit, item.barcode, item.hscode]
       );
 
       await conn.query(
@@ -1086,10 +1605,10 @@ app.post('/api/sales', async (req, res) => {
         saleResult.insertId,
         Number(userId) || null,
         safeCurrency,
-        Number(subtotal) || (Number(total) || 0) - (Number(tax) || 0),
-        Number(tax) || 0,
-        Number(total) || 0,
-        Number(totalProfit) || 0,
+        calculatedSubtotal,
+        calculatedTax,
+        calculatedTotal,
+        totalProfit,
         safePaymentMethod
       ]
     );
@@ -1097,34 +1616,34 @@ app.post('/api/sales', async (req, res) => {
     if (safeCurrency === 'USD') {
       await conn.query(
         'INSERT INTO sales_usd (transaction_id, sale_id, total, profit) VALUES (?, ?, ?, ?)',
-        [transactionResult.insertId, saleResult.insertId, Number(total) || 0, Number(totalProfit) || 0]
+        [transactionResult.insertId, saleResult.insertId, calculatedTotal, totalProfit]
       );
     } else if (safeCurrency === 'ZAR') {
       await conn.query(
         'INSERT INTO sales_zar (transaction_id, sale_id, total, profit) VALUES (?, ?, ?, ?)',
-        [transactionResult.insertId, saleResult.insertId, Number(total) || 0, Number(totalProfit) || 0]
+        [transactionResult.insertId, saleResult.insertId, calculatedTotal, totalProfit]
       );
     } else if (safeCurrency === 'ZIG') {
       await conn.query(
         'INSERT INTO sales_zig (transaction_id, sale_id, total, profit) VALUES (?, ?, ?, ?)',
-        [transactionResult.insertId, saleResult.insertId, Number(total) || 0, Number(totalProfit) || 0]
+        [transactionResult.insertId, saleResult.insertId, calculatedTotal, totalProfit]
       );
     }
 
     if (safePaymentMethod === 'cash') {
       await conn.query(
         'INSERT INTO sales_cash (transaction_id, sale_id, total, profit) VALUES (?, ?, ?, ?)',
-        [transactionResult.insertId, saleResult.insertId, Number(total) || 0, Number(totalProfit) || 0]
+        [transactionResult.insertId, saleResult.insertId, calculatedTotal, totalProfit]
       );
     } else if (safePaymentMethod === 'ecocash') {
       await conn.query(
         'INSERT INTO sales_ecocash (transaction_id, sale_id, total, profit) VALUES (?, ?, ?, ?)',
-        [transactionResult.insertId, saleResult.insertId, Number(total) || 0, Number(totalProfit) || 0]
+        [transactionResult.insertId, saleResult.insertId, calculatedTotal, totalProfit]
       );
     } else if (safePaymentMethod === 'card') {
       await conn.query(
         'INSERT INTO sales_card (transaction_id, sale_id, total, profit) VALUES (?, ?, ?, ?)',
-        [transactionResult.insertId, saleResult.insertId, Number(total) || 0, Number(totalProfit) || 0]
+        [transactionResult.insertId, saleResult.insertId, calculatedTotal, totalProfit]
       );
     }
 
@@ -1133,18 +1652,19 @@ app.post('/api/sales', async (req, res) => {
       saleId: saleResult.insertId,
       itemCount: normalizedItems.length,
       paymentMethod: safePaymentMethod,
-      total: Number(total) || 0,
+      total: calculatedTotal,
       currencyCode: safeCurrency,
-      profit: Number(totalProfit) || 0
+      profit: totalProfit
     });
     res.status(201).json({
       id: saleResult.insertId,
       userId: Number(userId) || null,
-      total: Number(total) || 0,
-      tax: Number(tax) || 0,
+      subtotal: calculatedSubtotal,
+      total: calculatedTotal,
+      tax: calculatedTax,
       taxRate: normalizedTaxRate,
       currencyCode: safeCurrency,
-      profit: Number(totalProfit) || 0,
+      profit: totalProfit,
       items_count: normalizedItems.length,
       items: normalizedItems,
       created_at: new Date().toISOString()
@@ -1465,10 +1985,9 @@ app.get('/api/reports', async (req, res) => {
                 si.name AS productName,
                 COALESCE(SUM(si.quantity), 0) AS quantitySold,
                 COALESCE(SUM(si.quantity * si.price), 0) AS salesTotal,
-                COALESCE(SUM(si.quantity * (si.price - COALESCE(p.cost_price, 0))), 0) AS estimatedProfit
+                COALESCE(SUM(COALESCE(si.line_profit, si.quantity * (si.price - COALESCE(si.cost_price, 0)))), 0) AS estimatedProfit
          FROM sale_items si
          INNER JOIN sales s ON s.id = si.sale_id
-         LEFT JOIN products p ON p.id = si.product_id
          ${whereSql}
          GROUP BY si.product_id, si.name
          ORDER BY quantitySold DESC, salesTotal DESC
@@ -1568,13 +2087,30 @@ app.get('/api/dashboard/profit', async (req, res) => {
     nextMonthDate.setMonth(nextMonthDate.getMonth() + 1);
     const monthEndExclusive = nextMonthDate.toISOString().slice(0, 10);
 
+    const [fxRows] = await pool.query('SELECT rate_usd, rate_zar, rate_zig, updated_at FROM exchange_settings WHERE id = 1 LIMIT 1');
+    const fx = fxRows[0] || {};
+    const rateUSD = Number(fx.rate_usd) > 0 ? Number(fx.rate_usd) : 1;
+    const rateZAR = Number(fx.rate_zar) > 0 ? Number(fx.rate_zar) : 20;
+    const rateZIG = Number(fx.rate_zig) > 0 ? Number(fx.rate_zig) : 400;
+
+    const totalUsdExpr = `CASE currency_code
+      WHEN 'USD' THEN total / ?
+      WHEN 'ZAR' THEN total / ?
+      WHEN 'ZIG' THEN total / ?
+      ELSE total END`;
+    const profitUsdExpr = `CASE currency_code
+      WHEN 'USD' THEN profit / ?
+      WHEN 'ZAR' THEN profit / ?
+      WHEN 'ZIG' THEN profit / ?
+      ELSE profit END`;
+
     const [summaryRows] = await pool.query(
-      `SELECT COALESCE(SUM(total), 0) AS totalSales,
-              COALESCE(SUM(profit), 0) AS totalProfit,
+      `SELECT COALESCE(SUM(${totalUsdExpr}), 0) AS totalSalesUsd,
+              COALESCE(SUM(${profitUsdExpr}), 0) AS totalProfitUsd,
               COUNT(*) AS transactions
        FROM transactions
        WHERE DATE(created_at) = ?`,
-      [reportDate]
+      [rateUSD, rateZAR, rateZIG, rateUSD, rateZAR, rateZIG, reportDate]
     );
 
     const [byCurrencyRows] = await pool.query(
@@ -1591,36 +2127,52 @@ app.get('/api/dashboard/profit', async (req, res) => {
 
     const [byCashierRows] = await pool.query(
       `SELECT COALESCE(u.name, 'Unknown') AS cashierName,
-              COALESCE(SUM(t.total), 0) AS salesTotal,
-              COALESCE(SUM(t.profit), 0) AS profit,
+              COALESCE(SUM(CASE t.currency_code
+                WHEN 'USD' THEN t.total / ?
+                WHEN 'ZAR' THEN t.total / ?
+                WHEN 'ZIG' THEN t.total / ?
+                ELSE t.total END), 0) AS salesTotal,
+              COALESCE(SUM(CASE t.currency_code
+                WHEN 'USD' THEN t.profit / ?
+                WHEN 'ZAR' THEN t.profit / ?
+                WHEN 'ZIG' THEN t.profit / ?
+                ELSE t.profit END), 0) AS profit,
               COUNT(*) AS transactions
        FROM transactions t
        LEFT JOIN users u ON u.id = t.user_id
        WHERE DATE(t.created_at) = ?
        GROUP BY COALESCE(u.name, 'Unknown')
        ORDER BY profit DESC`,
-      [reportDate]
+      [rateUSD, rateZAR, rateZIG, rateUSD, rateZAR, rateZIG, reportDate]
     );
 
     const [byPaymentRows] = await pool.query(
       `SELECT COALESCE(NULLIF(LOWER(t.payment_method), ''), 'unknown') AS paymentMethod,
-              COALESCE(SUM(t.total), 0) AS salesTotal,
-              COALESCE(SUM(t.profit), 0) AS profit,
+              COALESCE(SUM(CASE t.currency_code
+                WHEN 'USD' THEN t.total / ?
+                WHEN 'ZAR' THEN t.total / ?
+                WHEN 'ZIG' THEN t.total / ?
+                ELSE t.total END), 0) AS salesTotal,
+              COALESCE(SUM(CASE t.currency_code
+                WHEN 'USD' THEN t.profit / ?
+                WHEN 'ZAR' THEN t.profit / ?
+                WHEN 'ZIG' THEN t.profit / ?
+                ELSE t.profit END), 0) AS profit,
               COUNT(*) AS transactions
        FROM transactions t
        WHERE DATE(t.created_at) = ?
        GROUP BY COALESCE(NULLIF(LOWER(t.payment_method), ''), 'unknown')
        ORDER BY salesTotal DESC`,
-      [reportDate]
+      [rateUSD, rateZAR, rateZIG, rateUSD, rateZAR, rateZIG, reportDate]
     );
 
     const [monthSummaryRows] = await pool.query(
-      `SELECT COALESCE(SUM(total), 0) AS totalSales,
-              COALESCE(SUM(profit), 0) AS totalProfit,
+      `SELECT COALESCE(SUM(${totalUsdExpr}), 0) AS totalSalesUsd,
+              COALESCE(SUM(${profitUsdExpr}), 0) AS totalProfitUsd,
               COUNT(*) AS transactions
        FROM transactions
        WHERE created_at >= ? AND created_at < ?`,
-      [monthStart, monthEndExclusive]
+      [rateUSD, rateZAR, rateZIG, rateUSD, rateZAR, rateZIG, monthStart, monthEndExclusive]
     );
 
     const [lastAuditRows] = await pool.query(
@@ -1635,16 +2187,22 @@ app.get('/api/dashboard/profit', async (req, res) => {
     res.json({
       date: reportDate,
       summary: {
-        totalSales: Number(summaryRows[0]?.totalSales) || 0,
-        totalProfit: Number(summaryRows[0]?.totalProfit) || 0,
+        totalSalesUsd: Number(summaryRows[0]?.totalSalesUsd) || 0,
+        totalProfitUsd: Number(summaryRows[0]?.totalProfitUsd) || 0,
         transactions: Number(summaryRows[0]?.transactions) || 0,
         lastAuditAt: lastAuditRows[0]?.created_at ? new Date(lastAuditRows[0].created_at).toLocaleString() : null
       },
       monthSummary: {
         month: reportDate.slice(0, 7),
-        totalSales: Number(monthSummaryRows[0]?.totalSales) || 0,
-        totalProfit: Number(monthSummaryRows[0]?.totalProfit) || 0,
+        totalSalesUsd: Number(monthSummaryRows[0]?.totalSalesUsd) || 0,
+        totalProfitUsd: Number(monthSummaryRows[0]?.totalProfitUsd) || 0,
         transactions: Number(monthSummaryRows[0]?.transactions) || 0
+      },
+      ratesSnapshot: {
+        USD: rateUSD,
+        ZAR: rateZAR,
+        ZIG: rateZIG,
+        updatedAt: fx.updated_at || null
       },
       byCurrency: (byCurrencyRows || []).map(row => ({
         currency: row.currency,
@@ -1744,6 +2302,245 @@ app.get('/api/admin/exchange-settings', async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ message: 'Failed to load exchange settings.' });
+  }
+});
+
+app.post('/api/security/session/ping', async (req, res) => {
+  try {
+    const sessionId = Number(req.body?.sessionId || 0);
+    const userId = Number(req.body?.userId || 0);
+    if (!sessionId || !userId) {
+      return res.status(400).json({ error: 'sessionId and userId are required.' });
+    }
+
+    const [result] = await pool.query(
+      'UPDATE login_sessions SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ? AND is_active = 1',
+      [sessionId, userId]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Session not found or inactive.' });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update session heartbeat.' });
+  }
+});
+
+app.post('/api/security/session/logout', async (req, res) => {
+  try {
+    const sessionId = Number(req.body?.sessionId || 0);
+    const userId = Number(req.body?.userId || 0);
+    if (!sessionId || !userId) {
+      return res.status(400).json({ error: 'sessionId and userId are required.' });
+    }
+
+    await pool.query(
+      'UPDATE login_sessions SET is_active = 0, logout_at = NOW(), last_seen_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?',
+      [sessionId, userId]
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to close session.' });
+  }
+});
+
+app.get('/api/admin/security/sessions', async (req, res) => {
+  try {
+    const canView = await ensureActorHasPermissions(req, ['manage_user_permissions']);
+    if (!canView) {
+      return res.status(403).json({ error: 'Not allowed to view security sessions.' });
+    }
+
+    const [rows] = await pool.query(
+      `SELECT id, user_id, username, user_name, user_role, ip_address, device_name, user_agent, is_active, login_at, last_seen_at, logout_at
+       FROM login_sessions
+       ORDER BY login_at DESC
+       LIMIT 200`
+    );
+
+    res.json(rows.map(mapLoginSessionRow));
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to load login sessions.' });
+  }
+});
+
+app.get('/api/admin/company-profile', async (req, res) => {
+  try {
+    const canView = await ensureActorHasPermissions(req, ['manage_company_settings']);
+    if (!canView) {
+      return res.status(403).json({ error: 'Not allowed to view company profile.' });
+    }
+
+    const [rows] = await pool.query('SELECT * FROM company_profile WHERE id = 1 LIMIT 1');
+    const profile = rows[0] ? mapCompanyProfileRow(rows[0]) : { ...DEFAULT_COMPANY_PROFILE };
+    res.json(profile);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to load company profile.' });
+  }
+});
+
+app.put('/api/admin/company-profile', async (req, res) => {
+  try {
+    const canEdit = await ensureActorHasPermissions(req, ['manage_company_settings']);
+    if (!canEdit) {
+      return res.status(403).json({ error: 'Not allowed to update company profile.' });
+    }
+
+    const [rows] = await pool.query('SELECT * FROM company_profile WHERE id = 1 LIMIT 1');
+    const current = rows[0] ? mapCompanyProfileRow(rows[0]) : { ...DEFAULT_COMPANY_PROFILE };
+    const next = sanitizeCompanyProfilePayload(req.body?.companyProfile || {}, current);
+
+    await pool.query(
+      `INSERT INTO company_profile
+        (id, legal_name, trading_name, edition, support_phone, support_email, website, address_line, city, country, vat_number, tin_number, registration_number)
+       VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+        legal_name = VALUES(legal_name),
+        trading_name = VALUES(trading_name),
+        edition = VALUES(edition),
+        support_phone = VALUES(support_phone),
+        support_email = VALUES(support_email),
+        website = VALUES(website),
+        address_line = VALUES(address_line),
+        city = VALUES(city),
+        country = VALUES(country),
+        vat_number = VALUES(vat_number),
+        tin_number = VALUES(tin_number),
+        registration_number = VALUES(registration_number)`,
+      [
+        next.legalName,
+        next.tradingName,
+        next.edition,
+        next.supportPhone,
+        next.supportEmail,
+        next.website,
+        next.addressLine,
+        next.city,
+        next.country,
+        next.vatNumber,
+        next.tinNumber,
+        next.registrationNumber
+      ]
+    );
+
+    const actorId = Number(req.body?.actorId || 0);
+    await logAudit('admin.company-profile.updated', String(actorId || 'admin'), {
+      legalName: next.legalName,
+      edition: next.edition,
+      supportPhone: next.supportPhone
+    });
+
+    const [updatedRows] = await pool.query('SELECT * FROM company_profile WHERE id = 1 LIMIT 1');
+    res.json(mapCompanyProfileRow(updatedRows[0]));
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to save company profile.' });
+  }
+});
+
+app.get('/api/receipt-settings', async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT * FROM receipt_settings WHERE id = 1 LIMIT 1');
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Receipt settings not configured.' });
+    }
+
+    res.json(mapReceiptSettingsRow(rows[0]));
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to load receipt settings.' });
+  }
+});
+
+app.get('/api/admin/receipt-settings', async (req, res) => {
+  try {
+    const canView = await ensureActorHasPermissions(req, ['manage_company_settings']);
+    const canViewFormat = await ensureActorHasPermissions(req, ['edit_receipt_format']);
+
+    if (!canView && !canViewFormat) {
+      return res.status(403).json({ error: 'Not allowed to view receipt settings.' });
+    }
+
+    const [rows] = await pool.query('SELECT * FROM receipt_settings WHERE id = 1 LIMIT 1');
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Receipt settings not configured.' });
+    }
+
+    res.json(mapReceiptSettingsRow(rows[0]));
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to load admin receipt settings.' });
+  }
+});
+
+app.put('/api/admin/receipt-settings', async (req, res) => {
+  try {
+    const hasCompanyPayload = req.body && typeof req.body.company === 'object' && req.body.company !== null;
+    const hasFormatPayload = req.body && typeof req.body.receiptFormat === 'object' && req.body.receiptFormat !== null;
+
+    if (!hasCompanyPayload && !hasFormatPayload) {
+      return res.status(400).json({ error: 'Provide company and/or receiptFormat payload.' });
+    }
+
+    const requiredPermissions = [];
+    if (hasCompanyPayload) requiredPermissions.push('manage_company_settings');
+    if (hasFormatPayload) requiredPermissions.push('edit_receipt_format');
+
+    const canEdit = await ensureActorHasPermissions(req, requiredPermissions);
+    if (!canEdit) {
+      return res.status(403).json({ error: 'Not allowed to update these receipt settings.' });
+    }
+
+    const [rows] = await pool.query('SELECT * FROM receipt_settings WHERE id = 1 LIMIT 1');
+    const current = rows[0] ? mapReceiptSettingsRow(rows[0]) : { ...DEFAULT_RECEIPT_SETTINGS };
+
+    const mergedPayload = {
+      ...current,
+      ...(hasCompanyPayload ? req.body.company : {}),
+      ...(hasFormatPayload ? req.body.receiptFormat : {})
+    };
+
+    const next = sanitizeReceiptSettingsPayload(mergedPayload, current);
+
+    await pool.query(
+      `INSERT INTO receipt_settings
+        (id, company_name, company_address, vat_number, tin_number, receipt_header, receipt_footer, receipt_extra, show_company_details, show_cashier, show_datetime)
+       VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+        company_name = VALUES(company_name),
+        company_address = VALUES(company_address),
+        vat_number = VALUES(vat_number),
+        tin_number = VALUES(tin_number),
+        receipt_header = VALUES(receipt_header),
+        receipt_footer = VALUES(receipt_footer),
+        receipt_extra = VALUES(receipt_extra),
+        show_company_details = VALUES(show_company_details),
+        show_cashier = VALUES(show_cashier),
+        show_datetime = VALUES(show_datetime)`,
+      [
+        next.companyName,
+        next.companyAddress,
+        next.vatNumber,
+        next.tinNumber,
+        next.receiptHeader,
+        next.receiptFooter,
+        next.receiptExtra,
+        next.showCompanyDetails ? 1 : 0,
+        next.showCashier ? 1 : 0,
+        next.showDateTime ? 1 : 0
+      ]
+    );
+
+    const actorId = Number(req.body?.actorId || 0);
+    await logAudit('admin.receipt-settings.updated', String(actorId || 'admin'), {
+      companyUpdated: hasCompanyPayload,
+      formatUpdated: hasFormatPayload
+    });
+
+    const [updatedRows] = await pool.query('SELECT * FROM receipt_settings WHERE id = 1 LIMIT 1');
+    res.json(mapReceiptSettingsRow(updatedRows[0]));
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to save receipt settings.' });
   }
 });
 

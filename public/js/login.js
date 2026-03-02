@@ -1,4 +1,10 @@
 const LoginModule = {
+  getDeviceName() {
+    const platform = navigator.userAgentData?.platform || navigator.platform || 'Unknown Platform';
+    const lang = navigator.language || 'en';
+    return `${platform} (${lang})`;
+  },
+
   async init() {
     const loginForm = document.getElementById('loginForm');
     const loginError = document.getElementById('loginError');
@@ -16,9 +22,12 @@ const LoginModule = {
       loginStatus.className = 'login-status loading';
 
       try {
-        const user = await API.login(username, password);
+        const user = await API.login(username, password, {
+          deviceName: this.getDeviceName(),
+          userAgent: navigator.userAgent || ''
+        });
         Auth.setUser(user);
-        loginError.textContent = 'Are you sure that youre authorized to login  or youre a thief';
+        loginError.textContent = '';
         loginStatus.textContent = 'Login successful!  Welcome to our POS system.';
         loginStatus.className = 'login-status success';
 

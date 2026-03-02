@@ -15,18 +15,23 @@ const Router = {
     const normalizedAccess = typeof access === 'object' && access !== null
       ? {
           adminOnly: Boolean(access.adminOnly),
-          requiredPermission: String(access.requiredPermission || '').trim()
+          requiredPermission: String(access.requiredPermission || '').trim(),
+          anyPermissions: Array.isArray(access.anyPermissions)
+            ? access.anyPermissions.map(item => String(item || '').trim()).filter(Boolean)
+            : []
         }
       : {
           adminOnly: Boolean(access),
-          requiredPermission: ''
+          requiredPermission: '',
+          anyPermissions: []
         };
 
     this.pages[name] = {
       file: htmlFile,
       init: initFunction,
       adminOnly: normalizedAccess.adminOnly,
-      requiredPermission: normalizedAccess.requiredPermission
+      requiredPermission: normalizedAccess.requiredPermission,
+      anyPermissions: normalizedAccess.anyPermissions
     };
   },
 
@@ -64,6 +69,15 @@ const Router = {
         return;
       }
 
+      if (Array.isArray(page.anyPermissions) && page.anyPermissions.length > 0) {
+        const hasAtLeastOnePermission = page.anyPermissions.some(permission => Auth.hasPermission(permission));
+        if (!hasAtLeastOnePermission) {
+          console.warn(`Access Denied: Missing any required permission for page '${pageName}'.`);
+          this.navigate('pos');
+          return;
+        }
+      }
+
       // Corrected the fetch path to be relative to the public root
       const response = await fetch(page.file);
       if (!response.ok) {
@@ -82,6 +96,14 @@ const Router = {
           console.error(`Error initializing page '${pageName}':`, initError);
           this.appContainer.innerHTML += `<div class="error"><p>Error initializing page module: ${initError.message}</p></div>`;
         }
+      }
+
+      try {
+        if (window.AppShell && typeof window.AppShell.applyCommonFeatures === 'function') {
+          window.AppShell.applyCommonFeatures();
+        }
+      } catch (shellError) {
+        console.error('AppShell Enhancement Error:', shellError);
       }
     } catch (error) {
       console.error('Router Navigation Error:', error);

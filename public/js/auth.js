@@ -7,7 +7,9 @@ const Auth = {
       'add_users',
       'delete_users',
       'alter_inventory',
-      'manage_user_permissions'
+      'manage_user_permissions',
+      'manage_company_settings',
+      'edit_receipt_format'
     ],
     manager: ['customer_transactions', 'manage_sales_orders', 'alter_inventory'],
     supervisor: ['customer_transactions', 'manage_sales_orders'],
@@ -34,7 +36,8 @@ const Auth = {
     return {
       ...user,
       role,
-      permissions: this.normalizePermissions(user.permissions, role)
+      permissions: this.normalizePermissions(user.permissions, role),
+      sessionId: Number(user.sessionId || 0) || 0
     };
   },
 
@@ -60,6 +63,10 @@ const Auth = {
   },
 
   logout() {
+    const current = this.currentUser;
+    if (current?.sessionId && current?.id && typeof API?.logoutSession === 'function') {
+      API.logoutSession(current.sessionId, current.id).catch(() => {});
+    }
     this.currentUser = null;
     localStorage.removeItem('user');
   },

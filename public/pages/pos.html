@@ -74,7 +74,7 @@
         <!-- Action Buttons -->
         <div class="cart-actions">
           <button id="clearCartBtn" class="btn btn-danger full-width">Clear Cart</button>
-          <button id="checkoutBtn" class="btn btn-success full-width">Proceed to Payment</button>
+          <button id="checkoutBtn" class="btn btn-success full-width">Sell</button>
         </div>
 
         <div id="posExchangeRatesPanel" class="pos-exchange-panel">
@@ -178,7 +178,7 @@
   <div id="stockDepletionModal" class="modal-overlay">
     <div class="modal-content stock-depletion-modal">
       <div class="modal-header alert-header">
-        <h2>⚠️ Insufficient Stock</h2>
+        <h2> Insufficient Stock</h2>
         <button type="button" class="modal-close-btn" onclick="POSModule.closeStockAlert()">✕</button>
       </div>
       
@@ -189,7 +189,6 @@
         </div>
         
         <div class="stock-warning">
-          <p><strong>⚠️ Action Required:</strong></p>
           <p>Please notify the supervisor or send a stock replenishment request for the items listed above.</p>
         </div>
       </div>
@@ -227,11 +226,9 @@
           
           <div class="stock-empty-message">
             <p><strong>This item is currently out of stock.</strong></p>
-            <p>We're sorry! This product is not available right now. Would you like to:</p>
+           
             <ul class="stock-options">
-              <li>✓ Check back later for restocking</li>
-              <li>✓ Look for similar products</li>
-              <li>✓ Sell something else</li>
+              <li>Sell something else</li>
             </ul>
           </div>
         </div>
@@ -270,8 +267,8 @@
         <button id="emailReceiptBtn" class="btn btn-secondary" onclick="POSModule.emailReceipt()">
           📧 Email Receipt
         </button>
-        <button id="closeReceiptBtn" class="btn btn-tertiary" onclick="POSModule.closeReceiptModal()">
-          Done
+        <button id="closeReceiptBtn" class="btn btn-tertiary" onclick="POSModule.goBackToPosFromReceipt()">
+          Go Back to POS
         </button>
       </div>
     </div>
@@ -281,7 +278,7 @@
   <div id="barcodeErrorModal" class="modal-overlay">
     <div class="modal-content barcode-error-modal">
       <div class="modal-header barcode-error-header">
-        <h2>❌ Product Not Found</h2>
+        <h2>Product Not Found</h2>
         <button type="button" class="modal-close-btn" onclick="POSModule.closeBarcodeErrorModal()">✕</button>
       </div>
       
@@ -291,8 +288,6 @@
           <p class="barcode-hint">Would you like to:</p>
           <ul class="barcode-options">
             <li>✓ Try scanning again</li>
-            <li>✓ Search for the product manually</li>
-            <li>✓ Add a new product</li>
           </ul>
         </div>
       </div>

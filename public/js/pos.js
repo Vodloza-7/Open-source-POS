@@ -4,12 +4,14 @@ const POSModule = {
   products: [],
   currentReceiptHtml: null,
   config: null,
+  receiptSettings: null,
   exchangeRates: null,
   exchangeRatesRefreshTimer: null,
 
   async init() {
     this.config = this.getConfig();
     this.setupEventListeners();
+    await this.loadReceiptSettings();
     this.updateUserDisplay();
     this.applyRolePermissions();
     await this.loadExchangeRates();
@@ -31,6 +33,30 @@ const POSModule = {
       rates,
       updatedAt: data?.updatedAt || null
     };
+  },
+
+  normalizeReceiptSettings(data) {
+    return {
+      companyName: String(data?.companyName || ''),
+      companyAddress: String(data?.companyAddress || ''),
+      vatNumber: String(data?.vatNumber || ''),
+      tinNumber: String(data?.tinNumber || ''),
+      receiptHeader: String(data?.receiptHeader || ''),
+      receiptFooter: String(data?.receiptFooter || 'Thank you for your purchase'),
+      receiptExtra: String(data?.receiptExtra || ''),
+      showCompanyDetails: data?.showCompanyDetails !== false,
+      showCashier: data?.showCashier !== false,
+      showDateTime: data?.showDateTime !== false
+    };
+  },
+
+  async loadReceiptSettings() {
+    try {
+      const data = await API.getReceiptSettings();
+      this.receiptSettings = this.normalizeReceiptSettings(data);
+    } catch (error) {
+      this.receiptSettings = this.normalizeReceiptSettings({});
+    }
   },
 
   applyCurrentCurrencyRateFromExchange() {
@@ -250,8 +276,13 @@ const POSModule = {
 
   applyRolePermissions() {
     const isAdmin = Auth.isAdmin();
+    const canOpenAdminPage = isAdmin ||
+      Auth.hasPermission('manage_user_permissions') ||
+      Auth.hasPermission('manage_company_settings') ||
+      Auth.hasPermission('edit_receipt_format');
+
     document.querySelectorAll('.admin-only').forEach(el => {
-      el.style.display = isAdmin ? 'inline-block' : 'none';
+      el.style.display = canOpenAdminPage ? 'inline-block' : 'none';
     });
 
     const canTransact = Auth.hasPermission('customer_transactions');
@@ -287,16 +318,55 @@ const POSModule = {
   },
 
   getCurrencySettings() {
+    const parsedRate = Number(localStorage.getItem('pos.currencyRate') || '1');
+    const currencyRate = Number.isFinite(parsedRate) && parsedRate > 0 ? parsedRate : 1;
     return {
       currencyCode: localStorage.getItem('pos.currencyCode') || 'USD',
       currencySymbol: localStorage.getItem('pos.currencySymbol') || '$',
-      currencyRate: Number(localStorage.getItem('pos.currencyRate') || '1') || 1
+      currencyRate
     };
   },
   convertFromBase(amount) {
   const { currencyRate } = this.getCurrencySettings();
   const value = Number(amount) || 0;
   return value * currencyRate;
+  },
+  convertToBase(amount) {
+    const { currencyRate } = this.getCurrencySettings();
+    const value = Number(amount) || 0;
+    if (!Number.isFinite(currencyRate) || currencyRate <= 0) return value;
+    return value / currencyRate;
+  },
+  formatDisplayMoney(amountInDisplayCurrency) {
+    const { currencySymbol } = this.getCurrencySettings();
+    const value = Number(amountInDisplayCurrency) || 0;
+    return `${currencySymbol}${value.toFixed(2)}`;
+  },
+  parseMoneyInput(value) {
+    const raw = String(value ?? '').trim();
+    if (!raw) return 0;
+
+    const cleaned = raw.replace(/[^\d,.-]/g, '');
+    if (!cleaned) return 0;
+
+    const hasDot = cleaned.includes('.');
+    const hasComma = cleaned.includes(',');
+    let normalized = cleaned;
+
+    if (hasComma && hasDot) {
+      normalized = cleaned.replace(/,/g, '');
+    } else if (hasComma && !hasDot) {
+      const parts = cleaned.split(',');
+      const lastPart = parts[parts.length - 1] || '';
+      if (lastPart.length === 3 && parts.length > 1) {
+        normalized = cleaned.replace(/,/g, '');
+      } else {
+        normalized = cleaned.replace(/,/g, '.');
+      }
+    }
+
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
   },
   formatMoney(amount) {
     const { currencySymbol } = this.getCurrencySettings();
@@ -570,7 +640,8 @@ calculateCartTotalsBase() {
       alert('Cart is empty!');
       return;
     }
-    const total = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) * (1 + this.getTaxRate());
+    const totals = this.calculateCartTotalsBase();
+    const total = totals.total;
     document.getElementById('modalTotalDue').textContent = this.formatMoney(total);
     
     const modalCartItems = document.getElementById('modalCartItems');
@@ -596,11 +667,14 @@ calculateCartTotalsBase() {
   },
 
   calculateChange(amountTendered) {
-    const total = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) * (1 + this.getTaxRate());
-    const tendered = parseFloat(amountTendered) || 0;
-    const change = tendered - total;
+    const totals = this.calculateCartTotalsBase();
+    const totalDisplay = this.convertFromBase(totals.total);
+    const tenderedDisplay = this.parseMoneyInput(amountTendered);
+    const changeDisplay = tenderedDisplay - totalDisplay;
     
-    document.getElementById('changeDue').textContent = change >= 0 ? this.formatMoney(change) : this.formatMoney(0);
+    document.getElementById('changeDue').textContent = changeDisplay >= 0
+      ? this.formatDisplayMoney(changeDisplay)
+      : this.formatDisplayMoney(0);
   },
 
   handleBarcodeScan(rawValue) {
@@ -787,6 +861,25 @@ calculateCartTotalsBase() {
   },
 // ...existing code...
   buildReceiptHtml(saleId, paymentMethod, totals) {
+    const settings = this.receiptSettings || this.normalizeReceiptSettings({});
+    const currentUser = Auth.getUser();
+    const defaultTitle = `Receipt #${saleId}`;
+    const heading = settings.receiptHeader ? this.escapeHtml(settings.receiptHeader) : defaultTitle;
+    const receiptDate = new Date().toLocaleString();
+
+    const companyBits = [];
+    if (settings.companyName) companyBits.push(`<div>${this.escapeHtml(settings.companyName)}</div>`);
+    if (settings.companyAddress) companyBits.push(`<div>${this.escapeHtml(settings.companyAddress)}</div>`);
+    if (settings.vatNumber) companyBits.push(`<div>VAT: ${this.escapeHtml(settings.vatNumber)}</div>`);
+    if (settings.tinNumber) companyBits.push(`<div>TIN: ${this.escapeHtml(settings.tinNumber)}</div>`);
+
+    const extraLines = String(settings.receiptExtra || '')
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(Boolean)
+      .map(line => `<div class="footer">${this.escapeHtml(line)}</div>`)
+      .join('');
+
     return `
       <html>
       <head>
@@ -811,8 +904,9 @@ calculateCartTotalsBase() {
         </style>
       </head>
       <body>
-        <h2>Receipt #${saleId}</h2>
-        <div class="meta">${new Date().toLocaleString()}</div>
+        <h2>${heading}</h2>
+        ${settings.showCompanyDetails && companyBits.length ? `<div class="meta">${companyBits.join('')}</div>` : ''}
+        ${settings.showDateTime ? `<div class="meta">${receiptDate}</div>` : ''}
         <div class="divider"></div>
         <table>
           <thead>
@@ -841,7 +935,9 @@ calculateCartTotalsBase() {
         <div class="receipt-line"><span>Tax</span><span>${this.formatMoney(totals.tax)}</span></div>
         <div class="receipt-line total"><span>Total</span><span>${this.formatMoney(totals.total)}</span></div>
         <div class="receipt-line"><span>Payment</span><span>${paymentMethod.toUpperCase()}</span></div>
-        <div class="footer">Thank you for your purchase</div>
+        ${settings.showCashier ? `<div class="receipt-line"><span>Cashier</span><span>${this.escapeHtml(currentUser?.name || '-')}</span></div>` : ''}
+        ${extraLines}
+        <div class="footer">${this.escapeHtml(settings.receiptFooter || 'Thank you for your purchase')}</div>
       </body>
       </html>
     `;
@@ -875,6 +971,11 @@ calculateCartTotalsBase() {
     // Clear cart after closing receipt
     this.cart = [];
     this.updateCart();
+  },
+
+  goBackToPosFromReceipt() {
+    this.closeReceiptModal();
+    Router.navigate('pos');
   },
 
   showBarcodeErrorModal(barcode) {
@@ -934,7 +1035,10 @@ calculateCartTotalsBase() {
   async completeSale() {
     const selectedMethod = document.querySelector('input[name="paymentMethod"]:checked').value;
     const taxRate = this.getTaxRate();
-    const total = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0) * (1 + taxRate);
+    const totals = this.calculateCartTotalsBase();
+    const subtotal = totals.subtotal;
+    const tax = totals.tax;
+    const total = totals.total;
 
     await this.loadProducts();
 
@@ -946,8 +1050,9 @@ calculateCartTotalsBase() {
 
     // Validate based on payment method
     if (selectedMethod === 'cash') {
-      const amountTendered = parseFloat(document.getElementById('amountTendered').value) || 0;
-      if (amountTendered < total) {
+      const amountTenderedDisplay = this.parseMoneyInput(document.getElementById('amountTendered').value);
+      const totalDisplay = this.convertFromBase(total);
+      if (amountTenderedDisplay < totalDisplay) {
         alert('Amount tendered is less than the total due.');
         return;
       }
@@ -959,8 +1064,6 @@ calculateCartTotalsBase() {
       }
     }
 
-    const subtotal = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const tax = subtotal * taxRate;
     const user = Auth.getUser();
     const { currencyCode } = this.getCurrencySettings();
 
@@ -990,9 +1093,10 @@ calculateCartTotalsBase() {
       // Build sale complete details
       let changeMessage = '';
       if (selectedMethod === 'cash') {
-        const amountTendered = parseFloat(document.getElementById('amountTendered').value);
-        const change = amountTendered - total;
-        changeMessage = `<p class="change-due">💰 Change Due: <strong>${this.formatMoney(change)}</strong></p>`;
+        const amountTenderedDisplay = this.parseMoneyInput(document.getElementById('amountTendered').value);
+        const totalDisplay = this.convertFromBase(total);
+        const changeDisplay = amountTenderedDisplay - totalDisplay;
+        changeMessage = `<p class="change-due">💰 Change Due: <strong>${this.formatDisplayMoney(changeDisplay)}</strong></p>`;
       }
       
       const saleDetails = `

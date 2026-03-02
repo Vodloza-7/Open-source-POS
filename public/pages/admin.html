@@ -25,6 +25,8 @@
 
         <nav class="admin-frame admin-nav" aria-label="Admin Sections">
           <button class="admin-nav-btn is-active" data-section="users">Manage Users</button>
+          <button class="admin-nav-btn" data-section="company">Company Profile</button>
+          <button class="admin-nav-btn" data-section="security">Security Sessions</button>
           <button class="admin-nav-btn" data-section="stock">Manage Stock</button>
           <button class="admin-nav-btn" data-section="suppliers">Manage Suppliers</button>
           <button class="admin-nav-btn" data-section="profit">Profit Dashboard</button>
@@ -36,6 +38,8 @@
 
         <div class="admin-frame admin-actions">
           <button class="btn btn-primary full-width" data-section-target="users">Add User</button>
+          <button class="btn btn-primary full-width" data-section-target="company">Edit Company Profile</button>
+          <button class="btn btn-dark full-width" data-section-target="security">View Security Sessions</button>
           <button class="btn btn-dark full-width" data-section-target="stock">Update Stock</button>
           <button class="btn btn-danger full-width" data-section-target="suppliers">Review Suppliers</button>
           <button class="btn btn-primary full-width" data-section-target="profit">Profit Dashboard</button>
@@ -98,6 +102,105 @@
           </div>
         </div>
 
+        <div class="admin-panel" id="admin-panel-company" data-section="company">
+          <div class="panel-header">
+            <div>
+              <h2>Company Profile</h2>
+              <p>Edit company details stored in the database for official use and branding.</p>
+            </div>
+            <div class="panel-actions">
+              <button class="btn btn-dark" id="refreshCompanyProfileBtn" type="button">Refresh Profile</button>
+            </div>
+          </div>
+
+          <div class="panel-frame">
+            <form id="companyProfileForm" class="system-settings-form">
+              <h3>Core Identity</h3>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="companyLegalName">Legal Name</label>
+                  <input type="text" id="companyLegalName" maxlength="255" required>
+                </div>
+                <div class="form-group">
+                  <label for="companyTradingName">Trading Name</label>
+                  <input type="text" id="companyTradingName" maxlength="255">
+                </div>
+                <div class="form-group">
+                  <label for="companyEdition">Company Edition</label>
+                  <input type="text" id="companyEdition" maxlength="120" placeholder="e.g. Enterprise Edition">
+                </div>
+              </div>
+
+              <h3>Support & Contact</h3>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="companySupportPhone">Support Phone</label>
+                  <input type="text" id="companySupportPhone" maxlength="80">
+                </div>
+                <div class="form-group">
+                  <label for="companySupportEmail">Support Email</label>
+                  <input type="email" id="companySupportEmail" maxlength="180">
+                </div>
+                <div class="form-group">
+                  <label for="companyWebsite">Website</label>
+                  <input type="text" id="companyWebsite" maxlength="255">
+                </div>
+              </div>
+
+              <h3>Location & Compliance</h3>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="companyAddressLine">Address</label>
+                  <input type="text" id="companyAddressLine" maxlength="255">
+                </div>
+                <div class="form-group">
+                  <label for="companyCity">City</label>
+                  <input type="text" id="companyCity" maxlength="120">
+                </div>
+                <div class="form-group">
+                  <label for="companyCountry">Country</label>
+                  <input type="text" id="companyCountry" maxlength="120">
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="companyVat">VAT Number</label>
+                  <input type="text" id="companyVat" maxlength="100">
+                </div>
+                <div class="form-group">
+                  <label for="companyTin">TIN Number</label>
+                  <input type="text" id="companyTin" maxlength="100">
+                </div>
+                <div class="form-group">
+                  <label for="companyRegNumber">Registration Number</label>
+                  <input type="text" id="companyRegNumber" maxlength="120">
+                </div>
+              </div>
+
+              <button type="submit" class="btn btn-primary">Save Company Profile</button>
+            </form>
+            <div id="companyProfileStatus" class="status-message"></div>
+          </div>
+        </div>
+
+        <div class="admin-panel" id="admin-panel-security" data-section="security">
+          <div class="panel-header">
+            <div>
+              <h2>Security Sessions</h2>
+              <p>Monitor all logged-in devices with IP address, device name, and activity timestamps.</p>
+            </div>
+            <div class="panel-actions">
+              <button class="btn btn-dark" id="refreshSecuritySessionsBtn" type="button">Refresh Sessions</button>
+            </div>
+          </div>
+
+          <div class="panel-frame">
+            <div id="securitySessionsContainer" class="admin-placeholder">Loading security sessions...</div>
+            <div id="securitySessionsStatus" class="status-message"></div>
+          </div>
+        </div>
+
         <div class="admin-panel" id="admin-panel-stock" data-section="stock">
           <div class="panel-header">
             <div>
@@ -150,30 +253,61 @@
           <div class="panel-header">
             <div>
               <h2>Manage Suppliers</h2>
-              <p>Maintain supplier contracts and delivery schedules.</p>
+              <p>Add, edit, and remove supplier contacts and addresses.</p>
             </div>
             <div class="panel-actions">
-              <button class="btn btn-primary">Add Supplier</button>
-              <button class="btn btn-dark">Sync</button>
-            </div>
-          </div>
-
-          <div class="panel-frame admin-grid">
-            <div class="admin-tile">
-              <h3>Active Suppliers</h3>
-              <p>Review active relationships and contact info.</p>
-              <button class="btn btn-primary">View List</button>
-            </div>
-            <div class="admin-tile">
-              <h3>Pending Orders</h3>
-              <p>Track inbound shipments and lead times.</p>
-              <button class="btn btn-danger">Check Status</button>
+              <button class="btn btn-dark" id="refreshSuppliersBtn" type="button">Refresh Suppliers</button>
             </div>
           </div>
 
           <div class="panel-frame">
+            <form id="supplierForm" class="system-settings-form">
+              <h3>Supplier Details</h3>
+              <input type="hidden" id="supplierId">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="supplierName">Supplier Name</label>
+                  <input type="text" id="supplierName" maxlength="255" required>
+                </div>
+                <div class="form-group">
+                  <label for="supplierContactPerson">Contact Person</label>
+                  <input type="text" id="supplierContactPerson" maxlength="255">
+                </div>
+                <div class="form-group">
+                  <label for="supplierPhone">Phone</label>
+                  <input type="text" id="supplierPhone" maxlength="80">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="supplierEmail">Email</label>
+                  <input type="email" id="supplierEmail" maxlength="180">
+                </div>
+                <div class="form-group">
+                  <label for="supplierAddressLine">Address</label>
+                  <input type="text" id="supplierAddressLine" maxlength="255">
+                </div>
+                <div class="form-group">
+                  <label><input type="checkbox" id="supplierIsActive" checked> Active Supplier</label>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group" style="flex: 1 1 100%;">
+                  <label for="supplierNotes">Notes</label>
+                  <textarea id="supplierNotes" rows="3" placeholder="Delivery terms, payment terms, lead times..."></textarea>
+                </div>
+              </div>
+              <div class="panel-actions">
+                <button type="submit" class="btn btn-primary" id="saveSupplierBtn">Save Supplier</button>
+                <button type="button" class="btn btn-secondary" id="clearSupplierFormBtn">Clear</button>
+              </div>
+            </form>
+            <div id="suppliersStatus" class="status-message"></div>
+          </div>
+
+          <div class="panel-frame">
             <h3>Supplier Directory</h3>
-            <div class="admin-placeholder">Supplier details will appear here.</div>
+            <div id="suppliersTableContainer" class="admin-placeholder">Loading suppliers...</div>
           </div>
         </div>
 
@@ -214,7 +348,7 @@
           <div class="panel-header">
             <div>
               <h2>System Settings</h2>
-              <p>Configure currency and global preferences.</p>
+              <p>Configure currency, company parameters, and receipt format.</p>
             </div>
             <div class="panel-actions">
               <button class="btn btn-dark" id="resetSystemSettingsBtn" type="button">Reset Defaults</button>
@@ -258,13 +392,77 @@
             <div id="systemSettingsStatus" class="status-message"></div>
           </div>
 
+          <div class="panel-frame">
+            <form id="companySettingsForm" class="system-settings-form">
+              <h3>Company Parameters</h3>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="companyName">Company Name</label>
+                  <input type="text" id="companyName" maxlength="255" required>
+                </div>
+                <div class="form-group">
+                  <label for="companyAddress">Company Address</label>
+                  <input type="text" id="companyAddress" maxlength="255">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="companyVatNumber">VAT Number</label>
+                  <input type="text" id="companyVatNumber" maxlength="100">
+                </div>
+                <div class="form-group">
+                  <label for="companyTinNumber">TIN Number</label>
+                  <input type="text" id="companyTinNumber" maxlength="100">
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary" id="saveCompanySettingsBtn">Save Company Parameters</button>
+            </form>
+            <div id="companySettingsStatus" class="status-message"></div>
+          </div>
+
+          <div class="panel-frame">
+            <form id="receiptFormatForm" class="system-settings-form">
+              <h3>Receipt Format</h3>
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="receiptHeader">Receipt Header</label>
+                  <input type="text" id="receiptHeader" maxlength="255" placeholder="Optional heading above receipt number">
+                </div>
+                <div class="form-group">
+                  <label for="receiptFooter">Receipt Footer</label>
+                  <input type="text" id="receiptFooter" maxlength="255" placeholder="Thank you message">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group" style="flex: 1 1 100%;">
+                  <label for="receiptExtra">Extra Receipt Content</label>
+                  <textarea id="receiptExtra" rows="4" placeholder="Add custom lines to print on receipt"></textarea>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label><input type="checkbox" id="showCompanyDetails" checked> Show company details</label>
+                </div>
+                <div class="form-group">
+                  <label><input type="checkbox" id="showReceiptDateTime" checked> Show date/time</label>
+                </div>
+                <div class="form-group">
+                  <label><input type="checkbox" id="showReceiptCashier" checked> Show cashier</label>
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary" id="saveReceiptFormatBtn">Save Receipt Format</button>
+            </form>
+            <div id="receiptFormatStatus" class="status-message"></div>
+            <div id="receiptFormatPreview" class="receipt-format-preview"></div>
+          </div>
+
         </div>
 
         <div class="admin-panel" id="admin-panel-database" data-section="database">
           <div class="panel-header">
             <div>
               <h2>Database Connection</h2>
-              <p>Configure server and MySQL/XAMPP database settings.</p>
+              <p>Configure server XAMPP database settings.</p>
             </div>
             <div class="panel-actions">
               <button class="btn btn-danger" id="restartServerBtn" type="button">Restart Server</button>

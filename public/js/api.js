@@ -55,10 +55,24 @@ const API = {
   },
 
   // Authentication
-  login(username, password) {
+  login(username, password, metadata = {}) {
     return this.request('/login', {
       method: 'POST',
-      body: JSON.stringify({ username, password })
+      body: JSON.stringify({ username, password, ...metadata })
+    });
+  },
+
+  pingSession(sessionId, userId) {
+    return this.request('/security/session/ping', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId, userId })
+    });
+  },
+
+  logoutSession(sessionId, userId) {
+    return this.request('/security/session/logout', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId, userId })
     });
   },
 
@@ -88,6 +102,13 @@ const API = {
     });
   },
 
+  updateUser(userId, payload) {
+    return this.request(`/users/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+  },
+
   deleteUser(userId, payload) {
     return this.request(`/users/${userId}`, {
       method: 'DELETE',
@@ -98,6 +119,36 @@ const API = {
   // Products
   getProducts() {
     return this.request('/products');
+  },
+
+  // Suppliers
+  getSuppliers(actor = {}) {
+    const query = new URLSearchParams({
+      actorId: String(actor.actorId || ''),
+      actorRole: String(actor.actorRole || '')
+    }).toString();
+    return this.request(`/suppliers?${query}`);
+  },
+
+  addSupplier(payload) {
+    return this.request('/suppliers', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  updateSupplier(supplierId, payload) {
+    return this.request(`/suppliers/${supplierId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  deleteSupplier(supplierId, payload = {}) {
+    return this.request(`/suppliers/${supplierId}`, {
+      method: 'DELETE',
+      body: JSON.stringify(payload)
+    });
   },
 
   addProduct(product) {
@@ -170,6 +221,25 @@ const API = {
     return this.request('/admin/exchange-settings');
    },
 
+  getReceiptSettings() {
+    return this.request('/receipt-settings');
+  },
+
+  getAdminReceiptSettings(actor = {}) {
+    const query = new URLSearchParams({
+      actorId: String(actor.actorId || ''),
+      actorRole: String(actor.actorRole || '')
+    }).toString();
+    return this.request(`/admin/receipt-settings?${query}`);
+  },
+
+  saveAdminReceiptSettings(payload) {
+    return this.request('/admin/receipt-settings', {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+  },
+
   getCurrentExchangeRates() {
     const query = new URLSearchParams({ t: String(Date.now()) }).toString();
     return this.request(`/exchange-rates/current?${query}`);
@@ -203,6 +273,29 @@ saveExchangeSettings(payload) {
   // Admin connection settings
   getConnectionSettings() {
     return this.request('/admin/connection-settings');
+  },
+
+  getCompanyProfile(actor = {}) {
+    const query = new URLSearchParams({
+      actorId: String(actor.actorId || ''),
+      actorRole: String(actor.actorRole || '')
+    }).toString();
+    return this.request(`/admin/company-profile?${query}`);
+  },
+
+  saveCompanyProfile(payload) {
+    return this.request('/admin/company-profile', {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+  },
+
+  getSecuritySessions(actor = {}) {
+    const query = new URLSearchParams({
+      actorId: String(actor.actorId || ''),
+      actorRole: String(actor.actorRole || '')
+    }).toString();
+    return this.request(`/admin/security/sessions?${query}`);
   },
 
   updateConnectionSettings(payload) {
